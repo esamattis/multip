@@ -1,0 +1,10 @@
+[package]
+name = "multip"
+version = "0.1.0"
+authors = ["Esa-Matti Suuronen <esa-matti@suuronen.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = "0.4.0"
