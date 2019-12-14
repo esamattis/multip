@@ -66,7 +66,7 @@ fn main() {
 
     let mut dings: Vec<Ding> = Vec::new();
 
-    for (i, command) in args[1..].iter().enumerate() {
+    for command in args[1..].iter() {
         let (name, command) = command_with_name(command);
 
         let child = run(&name[..], command);
@@ -88,7 +88,7 @@ fn main() {
             match ding.child.try_wait() {
                 Ok(Some(status)) => {
                     if !ding.died {
-                        println!("Process {} died with: {}", ding, status);
+                        println!("{} died with: {}", ding, status);
                         ding.died = true;
                     }
 
@@ -101,7 +101,7 @@ fn main() {
                     somebody_is_alive = true;
                     if killall && !ding.kill_sent {
                         ding.kill_sent = true;
-                        println!("Killing {}", ding.name);
+                        println!("Killing {}", ding);
                         ding.child.kill().expect("kill failed");
                     }
                 }
