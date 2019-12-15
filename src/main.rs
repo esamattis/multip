@@ -14,6 +14,16 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::mpsc;
 use std::{thread, time};
 
+macro_rules! log {
+    () => {
+        println!();
+    };
+    ($($arg:tt)+) => {
+        print!("[multip] ");
+        println!($($arg)*);
+    }
+}
+
 // Store last received signal here
 static SIGNAL: AtomicI32 = AtomicI32::new(0);
 
@@ -77,7 +87,7 @@ impl MultipChild<'_> {
         let stderr = cmd.stderr.take().expect("failed to take stderr");
 
         let pid = cmd.id() as i32;
-        println!("Started {} as {}", name, pid);
+        log!("Started [{}] with pid {}", name, pid);
 
         let pid = Pid::from_raw(pid);
 
@@ -108,9 +118,9 @@ impl MultipChild<'_> {
         }
 
         self.kill_sent = Some(sig);
-        println!("Sending {} to {}({})", sig, self.name, self.pid);
+        log!("Sending {} to {}({})", sig, self.name, self.pid);
         if kill(self.pid, sig).is_err() {
-            println!("kill failed for {}", self.name);
+            log!("kill failed for {}", self.name);
         }
     }
 
@@ -119,7 +129,7 @@ impl MultipChild<'_> {
         let name = self.name.to_string();
         thread::spawn(move || {
             let res = cmd.wait().expect("exit failed");
-            println!("{} exited {}", name, res);
+            log!("{} exited {}", name, res);
             tx.send(Message::Exit(name, res)).unwrap();
         });
     }
@@ -181,11 +191,11 @@ fn poll_signals(tx: &Channel) {
 
                 match sigint_count {
                     2 => {
-                        println!("Got second SIGINT, converting it to SIGTERM...");
+                        log!("Got second SIGINT, converting it to SIGTERM...");
                         tx.send(Message::ParentSignal(Signal::SIGTERM)).unwrap();
                     }
                     3 => {
-                        println!("Got second SIGINT, converting it to SIGKILL...");
+                        log!("Got second SIGINT, converting it to SIGKILL...");
                         tx.send(Message::ParentSignal(Signal::SIGKILL)).unwrap();
                     }
                     _ => {
@@ -200,7 +210,7 @@ fn poll_signals(tx: &Channel) {
 }
 
 fn main() {
-    println!("multip pid {}", id());
+    log!("start with pid {}", id());
     let (tx, rx) = mpsc::channel::<Message>();
 
     trap_signal(signal::SIGINT);
@@ -222,20 +232,20 @@ fn main() {
     for msg in rx {
         match msg {
             Message::Exit(name, exit_status) => {
-                println!("{} exited with {}", name, exit_status);
+                log!("{} exited with {}", name, exit_status);
                 for ding in children.iter_mut() {
                     if ding.name == name {
                         ding.exit_status = Some(exit_status);
                     }
                 }
                 if killall.is_none() {
-                    println!("First child died. Bringing all down with SIGTERM.");
+                    log!("First child died. Bringing all down with SIGTERM.");
                     killall = Some(Signal::SIGTERM);
                 }
             }
             Message::ParentSignal(parent_signal) => {
                 if killall.is_none() {
-                    println!("Parent got signal {}", parent_signal);
+                    log!("Parent got signal {}", parent_signal);
                 }
                 killall = Some(parent_signal);
             }
@@ -257,7 +267,7 @@ fn main() {
         }
 
         if !somebody_is_alive {
-            println!("All processes died. Exiting...");
+            log!("All processes died. Exiting...");
             return;
         }
     }
