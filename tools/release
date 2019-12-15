@@ -17,7 +17,8 @@ git push origin master:master
 git tag
 
 
-read -p "New version without the 'v'>" version
+echo "New version without the 'v'"
+read -p "version> " version
 
 git tag -a "v$version" -m "v$version"
 git push
