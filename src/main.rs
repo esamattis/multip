@@ -1,3 +1,6 @@
+use nix::sys::signal::kill;
+use nix::sys::signal::Signal::SIGTERM;
+use nix::unistd::Pid;
 use std::env;
 use std::fmt;
 use std::io::Read;
@@ -12,19 +15,19 @@ use std::time::Duration;
 fn cap(
     name: &str,
     stream: impl Read + Send + 'static,
-    tx: std::sync::mpsc::Sender<Line>,
+    tx: std::sync::mpsc::Sender<Message>,
 ) -> std::thread::JoinHandle<()> {
     let name = name.to_string();
     thread::spawn(move || {
         let buf = BufReader::new(stream);
         for line in buf.lines() {
             let name = name.to_string();
-            tx.send(Line { name, line }).unwrap();
+            tx.send(Message::Line(Line { name, line })).unwrap();
         }
     })
 }
 
-fn run(name: &str, command: &str, tx: &std::sync::mpsc::Sender<Line>) -> std::process::Child {
+fn run(name: &str, command: &str, tx: &std::sync::mpsc::Sender<Message>) -> Pid {
     let mut cmd = Command::new("/bin/sh")
         .arg("-c")
         .arg(command)
@@ -42,19 +45,30 @@ fn run(name: &str, command: &str, tx: &std::sync::mpsc::Sender<Line>) -> std::pr
     cap(name, stdout, tx1);
     cap(name, stderr, tx2);
 
-    cmd
+    let pid = cmd.id() as i32;
+    println!("Started {} as {}", name, pid);
+
+    let name = name.to_string();
+    let tx3 = mpsc::Sender::clone(&tx);
+    thread::spawn(move || {
+        let res = cmd.wait().expect("exit failed");
+        println!("{} exited {}", name, res);
+        tx3.send(Message::Exit(name, res)).unwrap();
+    });
+
+    Pid::from_raw(pid)
 }
 
 struct Ding<'a> {
     name: &'a str,
-    child: std::process::Child,
+    pid: Pid,
     kill_sent: bool,
-    died: bool,
+    exit_status: Option<std::process::ExitStatus>,
 }
 
 impl fmt::Display for Ding<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}({})", self.name, self.child.id())
+        write!(f, "{}({})", self.name, self.pid)
     }
 }
 
@@ -67,6 +81,11 @@ impl fmt::Display for Line {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "[{}] {}", self.name, self.line.as_ref().unwrap().trim())
     }
+}
+
+enum Message {
+    Line(Line),
+    Exit(String, std::process::ExitStatus),
 }
 
 fn command_with_name(s: &String) -> (&str, &str) {
@@ -85,54 +104,54 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let mut dings: Vec<Ding> = Vec::new();
-    let (tx, rx) = mpsc::channel::<Line>();
+    let (tx, rx) = mpsc::channel::<Message>();
 
     for command in args[1..].iter() {
         let (name, command) = command_with_name(command);
 
-        let child = run(name, command, &tx);
+        let pid = run(name, command, &tx);
 
         dings.push(Ding {
             name,
-            child,
+            pid,
+            exit_status: None,
             kill_sent: false,
-            died: false,
         })
     }
 
-    for received in rx {
-        println!("{}", received);
-        let mut somebody_is_alive = false;
-        let mut killall = false;
-
-        for ding in dings.iter_mut() {
-            match ding.child.try_wait() {
-                Ok(Some(status)) => {
-                    if !ding.died {
-                        println!("{} died with: {}", ding, status);
-                        ding.died = true;
-                    }
-
-                    if !killall {
-                        println!("Killing others!");
-                        killall = true;
+    let mut killall = false;
+    for msg in rx {
+        match msg {
+            Message::Exit(name, exit_status) => {
+                println!("{} exited with {}", name, exit_status);
+                for ding in dings.iter_mut() {
+                    if ding.name == name {
+                        ding.exit_status = Some(exit_status);
                     }
                 }
-                Ok(None) => {
-                    somebody_is_alive = true;
+                if !killall {
+                    println!("Killing others");
+                    killall = true;
                 }
-                Err(e) => println!("error attempting to wait: {}", e),
+            }
+            Message::Line(line) => {
+                println!("line: {}", line);
             }
         }
 
-        if killall {
-            for ding in dings.iter_mut() {
-                if ding.died {
-                    continue;
-                }
+        let mut somebody_is_alive = false;
+
+        for ding in dings.iter_mut() {
+            if !ding.exit_status.is_none() {
+                continue;
+            }
+
+            somebody_is_alive = true;
+
+            if killall && !ding.kill_sent {
                 ding.kill_sent = true;
                 println!("Killing {}", ding);
-                ding.child.kill().expect("kill failed");
+                kill(ding.pid, SIGTERM).expect("kill failed");
             }
         }
 
