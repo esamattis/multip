@@ -19,6 +19,6 @@ git tag
 
 read -p "New version without the 'v'>" version
 
-git tag -a "v$version" -m "Release v$version"
+git tag -a "v$version" -m "v$version"
 git push
 git push --tags
