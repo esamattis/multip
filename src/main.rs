@@ -65,7 +65,8 @@ impl MultipChild<'_> {
     fn spawn<'a>(name: &'a str, command: &str, tx: &'a Channel) -> MultipChild<'a> {
         let mut cmd = Command::new("/bin/sh")
             .arg("-c")
-            .arg(command)
+            // Add implicit exec to avoid extra process
+            .arg(format!("exec {}", command))
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
