@@ -24,9 +24,68 @@ impl fmt::Display for MultipChild<'_> {
     }
 }
 
+type Channel = std::sync::mpsc::Sender<Message>;
+
+impl MultipChild<'_> {
+    fn spawn<'a>(name: &'a str, command: &str, tx: &Channel) -> MultipChild<'a> {
+        let mut cmd = Command::new("/bin/sh")
+            .arg("-c")
+            .arg(command)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .ok()
+            .expect("failed to spwan");
+
+        let stdout = cmd.stdout.take().expect("lol");
+        let stderr = cmd.stderr.take().expect("lol");
+
+        let tx1 = mpsc::Sender::clone(&tx);
+        let tx2 = mpsc::Sender::clone(&tx);
+        capture_output_as_lines(name, stdout, tx1);
+        capture_output_as_lines(name, stderr, tx2);
+
+        let pid = cmd.id() as i32;
+        println!("Started {} as {}", name, pid);
+
+        let name2 = name.to_string();
+        let tx3 = mpsc::Sender::clone(&tx);
+        thread::spawn(move || {
+            let res = cmd.wait().expect("exit failed");
+            println!("{} exited {}", name2, res);
+            tx3.send(Message::Exit(name2, res)).unwrap();
+        });
+
+        let pid = Pid::from_raw(pid);
+
+        MultipChild {
+            name,
+            pid,
+            exit_status: None,
+            kill_sent: false,
+        }
+    }
+
+    fn kill(&mut self) {
+        if self.kill_sent || !self.is_alive() {
+            return;
+        }
+
+        self.kill_sent = true;
+        println!("Killing {}", self);
+        if kill(self.pid, SIGTERM).is_err() {
+            println!("kill failed for {}", self.name);
+        }
+    }
+
+    fn is_alive(&self) -> bool {
+        self.exit_status.is_none()
+    }
+}
+
 struct Line {
     name: String,
-    line: std::result::Result<std::string::String, std::io::Error>,
+    line: Result<String, std::io::Error>,
 }
 
 impl fmt::Display for Line {
@@ -43,7 +102,7 @@ enum Message {
 fn capture_output_as_lines(
     name: &str,
     stream: impl Read + Send + 'static,
-    tx: std::sync::mpsc::Sender<Message>,
+    tx: Channel,
 ) -> std::thread::JoinHandle<()> {
     let name = name.to_string();
     thread::spawn(move || {
@@ -53,38 +112,6 @@ fn capture_output_as_lines(
             tx.send(Message::Line(Line { name, line })).unwrap();
         }
     })
-}
-
-fn run(name: &str, command: &str, tx: &std::sync::mpsc::Sender<Message>) -> Pid {
-    let mut cmd = Command::new("/bin/sh")
-        .arg("-c")
-        .arg(command)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .ok()
-        .expect("failed to spwan");
-
-    let stdout = cmd.stdout.take().expect("lol");
-    let stderr = cmd.stderr.take().expect("lol");
-
-    let tx1 = mpsc::Sender::clone(&tx);
-    let tx2 = mpsc::Sender::clone(&tx);
-    capture_output_as_lines(name, stdout, tx1);
-    capture_output_as_lines(name, stderr, tx2);
-
-    let pid = cmd.id() as i32;
-    println!("Started {} as {}", name, pid);
-
-    let name = name.to_string();
-    let tx3 = mpsc::Sender::clone(&tx);
-    thread::spawn(move || {
-        let res = cmd.wait().expect("exit failed");
-        println!("{} exited {}", name, res);
-        tx3.send(Message::Exit(name, res)).unwrap();
-    });
-
-    Pid::from_raw(pid)
 }
 
 fn command_with_name(s: &String) -> (&str, &str) {
@@ -107,18 +134,12 @@ fn main() {
 
     for command in args[1..].iter() {
         let (name, command) = command_with_name(command);
-
-        let pid = run(name, command, &tx);
-
-        children.push(MultipChild {
-            name,
-            pid,
-            exit_status: None,
-            kill_sent: false,
-        })
+        let child = MultipChild::spawn(name, command, &tx);
+        children.push(child)
     }
 
     let mut killall = false;
+
     for msg in rx {
         match msg {
             Message::Exit(name, exit_status) => {
@@ -141,21 +162,17 @@ fn main() {
         let mut somebody_is_alive = false;
 
         for child in children.iter_mut() {
-            if !child.exit_status.is_none() {
-                continue;
+            if killall {
+                child.kill();
             }
 
-            somebody_is_alive = true;
-
-            if killall && !child.kill_sent {
-                child.kill_sent = true;
-                println!("Killing {}", child);
-                kill(child.pid, SIGTERM).expect("kill failed");
+            if child.is_alive() {
+                somebody_is_alive = true;
             }
         }
 
         if !somebody_is_alive {
-            println!("All processes died. Existing...");
+            println!("All processes died. Exiting...");
             return;
         }
     }
