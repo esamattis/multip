@@ -3,7 +3,7 @@ on:
         tags:
             - "v*"
 
-name: Build and upload release assets
+name: Make Release
 
 jobs:
     build_and_test:
@@ -11,7 +11,9 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@master
-            - uses: actions-rs/cargo@v1
+
+            - name: Build with Cargo
+              uses: actions-rs/cargo@v1
               with:
                   command: build
                   args: --release
@@ -19,7 +21,7 @@ jobs:
             - name: Optimize binary size
               run: strip target/release/multip
 
-            - name: Create Release
+            - name: Create Gitub Release
               id: create_release
               uses: actions/create-release@v1.0.0
               env:
