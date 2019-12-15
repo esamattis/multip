@@ -179,7 +179,7 @@ fn poll_signals(tx: &Channel) {
                 }
 
                 if sigint_count == 2 {
-                    println!("Got second SIGINT, killing forcibly...");
+                    println!("Got second SIGINT, converting it SIGKILL...");
                     tx.send(Message::ParentSignal(Signal::SIGKILL)).unwrap();
                 } else {
                     tx.send(Message::ParentSignal(sig)).unwrap();
@@ -227,7 +227,7 @@ fn main() {
             }
             Message::ParentSignal(parent_signal) => {
                 if killall.is_none() {
-                    println!("Parent got signal ");
+                    println!("Parent got signal {}", parent_signal);
                 }
                 killall = Some(parent_signal);
             }
