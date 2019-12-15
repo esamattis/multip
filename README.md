@@ -10,7 +10,8 @@ This is not a init replacement. If you need zombie process reaping pass
 
 This is somewhat similar to [concurrently], [s6][], [GNU Parallel][parallel]
 or some of it's [alternatives][] but intentionally much less featured. Also
-no runtime required as it is just single binary.
+no runtime is required as it is just a single binary in contrast to
+concurrently requiring node.js and GNU Parallel Perl.
 
 [concurrently]: https://www.npmjs.com/package/concurrently
 [s6]: http://skarnet.org/software/s6/
