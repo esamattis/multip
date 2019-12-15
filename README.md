@@ -3,8 +3,8 @@
 Tiny multi process manager for containers written in Rust. For example if you
 want to run nginx and php-fpm in a single container.
 
-> Note: This is not a init replacement. If you need zombie process reaping
-> pass `--init` to Docker and it will inject [tini][] for that.
+This is not a init replacement. If you need zombie process reaping pass
+`--init` to Docker and it will inject [tini][] for that.
 
 [tini]: https://github.com/krallin/tini
 
@@ -29,9 +29,9 @@ no runtime required as it is just single binary.
 
 ## Installation
 
-Grab a pre-build binary from the releases page
+Grab a pre-build binary from the releases [page][].
 
-<https://github.com/esamattis/multip/releases>
+[page]: https://github.com/esamattis/multip/releases
 
 It depends on libc so no Alpine support at this time.
 
@@ -96,5 +96,5 @@ while true; do
 done
 ```
 
-No that here we cannot use `exec` because we need to keep the script alive
+Note that here we cannot use `exec` because we need to keep the script alive
 for restarts.
