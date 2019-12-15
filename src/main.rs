@@ -179,11 +179,18 @@ fn poll_signals(tx: &Channel) {
                     sigint_count += 1;
                 }
 
-                if sigint_count == 2 {
-                    println!("Got second SIGINT, converting it SIGKILL...");
-                    tx.send(Message::ParentSignal(Signal::SIGKILL)).unwrap();
-                } else {
-                    tx.send(Message::ParentSignal(sig)).unwrap();
+                match sigint_count {
+                    2 => {
+                        println!("Got second SIGINT, converting it to SIGTERM...");
+                        tx.send(Message::ParentSignal(Signal::SIGTERM)).unwrap();
+                    }
+                    3 => {
+                        println!("Got second SIGINT, converting it to SIGKILL...");
+                        tx.send(Message::ParentSignal(Signal::SIGKILL)).unwrap();
+                    }
+                    _ => {
+                        tx.send(Message::ParentSignal(sig)).unwrap();
+                    }
                 }
             }
 

@@ -23,7 +23,7 @@ it's [alternatives][] but intentionally much less featured.
 -   Prefix process stdout&stderr with labels so you can know which process sent
     which message
 -   Signal forwarding to child processes
--   Second SIGINT (ctrl-c) sends SIGKILL to all children
+-   Second SIGINT (ctrl-c) sends SIGTERM instead to the children and third SIGKILL.
 
 ## Installation
 
