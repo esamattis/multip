@@ -1,6 +1,14 @@
-// console.log("start")
-
 const pid = process.pid;
+
+console.log(`start ${pid}`);
+
+// process.on("SIGINT", () => {
+//   console.log("Received SIGINT.");
+// });
+
+// process.on("SIGTERM", () => {
+//   console.log("Received SIGINT.");
+// });
 
 function rand() {
   return Math.round(Math.random() * 1000);

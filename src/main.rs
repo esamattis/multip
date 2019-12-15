@@ -1,5 +1,7 @@
+use libc::c_int;
+use nix::sys::signal;
 use nix::sys::signal::kill;
-use nix::sys::signal::Signal::SIGTERM;
+use nix::sys::signal::{sigaction, signal as trap, SigAction, SigHandler, Signal};
 use nix::unistd::Pid;
 use std::env;
 use std::fmt;
@@ -7,9 +9,11 @@ use std::io::Read;
 use std::io::{BufRead, BufReader};
 use std::marker::Send;
 use std::process::{Command, ExitStatus, Stdio};
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::mpsc;
-
 use std::thread;
+
+static SIGNAL: AtomicI32 = AtomicI32::new(0);
 
 struct Line {
     name: String,
@@ -84,7 +88,7 @@ impl MultipChild<'_> {
 
         self.kill_sent = true;
         println!("Killing {}", self);
-        if kill(self.pid, SIGTERM).is_err() {
+        if kill(self.pid, signal::SIGTERM).is_err() {
             println!("kill failed for {}", self.name);
         }
     }
@@ -128,9 +132,28 @@ fn command_with_name(s: &String) -> (&str, &str) {
     panic!("cannot parse name from> {}", s);
 }
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
+extern "C" fn handle(s: c_int) {
+    let real = s as i32;
+    SIGNAL.store(real, Ordering::Relaxed);
+    println!("SIGG {}", real);
+}
 
+fn main() {
+    let boo = SigHandler::Handler(handle);
+    // let sig_action = SigAction::new(boo, signal::SaFlags::empty(), signal::SigSet::empty());
+    // unsafe { sigaction(signal::SIGINT, &sig_action) }.unwrap();
+    unsafe { trap(signal::SIGINT, boo) }.unwrap();
+    unsafe { trap(signal::SIGTERM, boo) }.unwrap();
+
+    loop {
+        let foo = SIGNAL.swap(0, Ordering::Relaxed);
+
+        if foo != 0 {
+            println!("main got {}", foo);
+        }
+    }
+
+    let args: Vec<String> = env::args().collect();
     let mut children: Vec<MultipChild> = Vec::new();
     let (tx, rx) = mpsc::channel::<Message>();
 
