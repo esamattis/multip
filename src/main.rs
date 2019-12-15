@@ -129,7 +129,6 @@ impl MultipChild<'_> {
         let name = self.name.to_string();
         thread::spawn(move || {
             let res = cmd.wait().expect("exit failed");
-            log!("{} exited {}", name, res);
             tx.send(Message::Exit(name, res)).unwrap();
         });
     }
