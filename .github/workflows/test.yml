@@ -12,6 +12,3 @@ jobs:
               with:
                   command: build
                   args: --release
-            - run: |
-                  find target
-                  which strip
