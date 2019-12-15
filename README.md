@@ -57,7 +57,7 @@ export API_ENDPOINT=http://api.example/graphql
 exec node /app/server.js
 ```
 
-and call `multip /app/start.sh`.
+and call `multip "server: /app/start.sh" "other: /path/to/some/executable"`.
 
 Remember call the actual command with `exec` so it will replace the wrapper
 script process instead of starting new subprocess.
