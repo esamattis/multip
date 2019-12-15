@@ -8,8 +8,8 @@ want to run nginx and php-fpm in a single container.
 
 [tini]: https://github.com/krallin/tini
 
-This is somewhat similar to [concurrently], [s6][], [GNU Parallel][parallel] some of
-it's [alternatives][] but intentionally much less featured.
+This is somewhat similar to [concurrently], [s6][], [GNU Parallel][parallel]
+or some of it's [alternatives][] but intentionally much less featured.
 
 [concurrently]: https://www.npmjs.com/package/concurrently
 [s6]: http://skarnet.org/software/s6/
