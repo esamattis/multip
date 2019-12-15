@@ -195,7 +195,7 @@ fn poll_signals(tx: &Channel) {
                         tx.send(Message::ParentSignal(Signal::SIGTERM)).unwrap();
                     }
                     3 => {
-                        log!("Got second SIGINT, converting it to SIGKILL...");
+                        log!("Got third SIGINT, converting it to SIGKILL...");
                         tx.send(Message::ParentSignal(Signal::SIGKILL)).unwrap();
                     }
                     _ => {
