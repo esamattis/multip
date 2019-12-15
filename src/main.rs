@@ -1,7 +1,8 @@
 use libc::c_int;
 use nix::sys::signal;
 use nix::sys::signal::kill;
-use nix::sys::signal::{sigaction, signal as trap, SigAction, SigHandler, Signal};
+use nix::sys::signal::Signal;
+use nix::sys::signal::{signal as trap_os, SigHandler};
 use nix::unistd::Pid;
 use std::env;
 use std::fmt;
@@ -11,9 +12,17 @@ use std::marker::Send;
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::mpsc;
-use std::thread;
+use std::{thread, time};
 
 static SIGNAL: AtomicI32 = AtomicI32::new(0);
+
+fn int_to_sig(i: i32) -> Signal {
+    match i {
+        2 => Signal::SIGINT,
+        15 => Signal::SIGTERM,
+        _ => panic!("Unknown signal {}", i),
+    }
+}
 
 struct Line {
     name: String,
@@ -26,9 +35,15 @@ impl fmt::Display for Line {
     }
 }
 
+enum ParentSignal {
+    Passed(Signal),
+    Force,
+}
+
 enum Message {
     Line(Line),
     Exit(String, std::process::ExitStatus),
+    Signal(ParentSignal),
 }
 
 type Channel = std::sync::mpsc::Sender<Message>;
@@ -36,7 +51,7 @@ type Channel = std::sync::mpsc::Sender<Message>;
 struct MultipChild<'a> {
     name: &'a str,
     pid: Pid,
-    kill_sent: bool,
+    kill_sent: Option<Signal>,
     exit_status: Option<ExitStatus>,
     tx: &'a Channel,
 }
@@ -71,7 +86,7 @@ impl MultipChild<'_> {
             tx,
             pid,
             exit_status: None,
-            kill_sent: false,
+            kill_sent: None,
         };
 
         child.monitor_ouput(stdout);
@@ -81,14 +96,20 @@ impl MultipChild<'_> {
         child
     }
 
-    fn kill(&mut self) {
-        if self.kill_sent || !self.is_alive() {
+    fn kill(&mut self, sig: Signal) {
+        if !self.is_alive() {
             return;
         }
 
-        self.kill_sent = true;
-        println!("Killing {}", self);
-        if kill(self.pid, signal::SIGTERM).is_err() {
+        if let Some(prev) = self.kill_sent {
+            if prev == sig {
+                return;
+            }
+        }
+
+        self.kill_sent = Some(sig);
+        println!("Sending {} to {}({})", sig, self.name, self.pid);
+        if kill(self.pid, sig).is_err() {
             println!("kill failed for {}", self.name);
         }
     }
@@ -132,30 +153,52 @@ fn command_with_name(s: &String) -> (&str, &str) {
     panic!("cannot parse name from> {}", s);
 }
 
-extern "C" fn handle(s: c_int) {
-    let real = s as i32;
-    SIGNAL.store(real, Ordering::Relaxed);
-    println!("SIGG {}", real);
+extern "C" fn handle_os_signal(s: c_int) {
+    SIGNAL.store(s as i32, Ordering::SeqCst);
+}
+
+fn trap_signal(s: Signal) {
+    let handler = SigHandler::Handler(handle_os_signal);
+    unsafe { trap_os(s, handler) }.unwrap();
+}
+
+fn poll_signal(tx: &Channel) {
+    let tx = mpsc::Sender::clone(tx);
+
+    thread::spawn(move || {
+        let mut sigint_count = 0;
+        loop {
+            let sig = SIGNAL.swap(0, Ordering::SeqCst);
+
+            if sig != 0 {
+                let sig = int_to_sig(sig);
+
+                if sig == Signal::SIGINT {
+                    sigint_count += 1;
+                }
+
+                if sigint_count == 2 {
+                    println!("Got second SIGINT, killing forcibly...");
+                    tx.send(Message::Signal(ParentSignal::Force)).unwrap();
+                } else {
+                    tx.send(Message::Signal(ParentSignal::Passed(sig))).unwrap();
+                }
+            }
+
+            thread::sleep(time::Duration::from_millis(100));
+        }
+    });
 }
 
 fn main() {
-    let boo = SigHandler::Handler(handle);
-    // let sig_action = SigAction::new(boo, signal::SaFlags::empty(), signal::SigSet::empty());
-    // unsafe { sigaction(signal::SIGINT, &sig_action) }.unwrap();
-    unsafe { trap(signal::SIGINT, boo) }.unwrap();
-    unsafe { trap(signal::SIGTERM, boo) }.unwrap();
+    let (tx, rx) = mpsc::channel::<Message>();
 
-    loop {
-        let foo = SIGNAL.swap(0, Ordering::Relaxed);
-
-        if foo != 0 {
-            println!("main got {}", foo);
-        }
-    }
+    trap_signal(signal::SIGINT);
+    trap_signal(signal::SIGTERM);
+    poll_signal(&tx);
 
     let args: Vec<String> = env::args().collect();
     let mut children: Vec<MultipChild> = Vec::new();
-    let (tx, rx) = mpsc::channel::<Message>();
 
     for command in args[1..].iter() {
         let (name, command) = command_with_name(command);
@@ -163,7 +206,7 @@ fn main() {
         children.push(child)
     }
 
-    let mut killall = false;
+    let mut killall: Option<ParentSignal> = None;
 
     for msg in rx {
         match msg {
@@ -174,21 +217,32 @@ fn main() {
                         ding.exit_status = Some(exit_status);
                     }
                 }
-                if !killall {
-                    println!("Killing others");
-                    killall = true;
+                if killall.is_none() {
+                    println!("First child died. Bringing all down.");
+                    killall = Some(ParentSignal::Passed(Signal::SIGTERM));
                 }
             }
+            Message::Signal(parent_signal) => {
+                if killall.is_none() {
+                    println!("Parent got signal ");
+                }
+                killall = Some(parent_signal);
+            }
             Message::Line(line) => {
-                println!("line: {}", line);
+                println!("{}", line);
             }
         }
 
         let mut somebody_is_alive = false;
 
         for child in children.iter_mut() {
-            if killall {
-                child.kill();
+            if let Some(ParentSignal::Passed(sig)) = killall {
+                child.kill(sig);
+            }
+
+            if let Some(ParentSignal::Force) = killall {
+                println!("force killing children");
+                child.kill(Signal::SIGKILL);
             }
 
             if child.is_alive() {
