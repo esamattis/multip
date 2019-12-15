@@ -11,6 +11,22 @@ use std::sync::mpsc;
 
 use std::thread;
 
+struct Line {
+    name: String,
+    line: Result<String, std::io::Error>,
+}
+
+impl fmt::Display for Line {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}] {}", self.name, self.line.as_ref().unwrap().trim())
+    }
+}
+
+enum Message {
+    Line(Line),
+    Exit(String, std::process::ExitStatus),
+}
+
 type Channel = std::sync::mpsc::Sender<Message>;
 
 struct MultipChild<'a> {
@@ -98,22 +114,6 @@ impl MultipChild<'_> {
     fn is_alive(&self) -> bool {
         self.exit_status.is_none()
     }
-}
-
-struct Line {
-    name: String,
-    line: Result<String, std::io::Error>,
-}
-
-impl fmt::Display for Line {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{}] {}", self.name, self.line.as_ref().unwrap().trim())
-    }
-}
-
-enum Message {
-    Line(Line),
-    Exit(String, std::process::ExitStatus),
 }
 
 fn command_with_name(s: &String) -> (&str, &str) {
