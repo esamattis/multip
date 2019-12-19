@@ -12,10 +12,15 @@ jobs:
         steps:
             - uses: actions/checkout@master
 
+            - name: Add x86_64-unknown-linux-musl target
+              uses: actions-rs/toolchain@v1
+              with:
+                  target: x86_64-unknown-linux-musl
+                  override: true
+
             - name: Build with Cargo
               uses: actions-rs/cargo@v1
               with:
-                  target: x86_64-unknown-linux-musl
                   command: build
                   args: --release --target x86_64-unknown-linux-musl
 
