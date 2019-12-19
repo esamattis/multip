@@ -34,7 +34,8 @@ Grab a pre-build binary from the releases [page][].
 
 [page]: https://github.com/esamattis/multip/releases
 
-It depends on libc so no Alpine support at this time.
+The binary is statically linked with musl libc so it will run in bare bones
+distros too such as Alpine Linux.
 
 ## Usage
 
