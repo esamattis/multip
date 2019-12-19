@@ -228,7 +228,7 @@ fn main() {
 
     let mut killall: Option<Signal> = None;
 
-    for msg in rx {
+    for msg in &rx {
         match msg {
             Message::Exit(name, exit_status) => {
                 log!("{} exited with {}", name, exit_status);
@@ -267,7 +267,20 @@ fn main() {
 
         if !somebody_is_alive {
             log!("All processes died. Exiting...");
-            return;
+            break;
+        }
+    }
+
+    // Print all pending message from the buffers
+    for msg in rx.try_iter() {
+        match msg {
+            Message::Line(line) => {
+                println!("{}", line);
+            }
+            _ => {
+                println!("Unhandled remaining message...");
+                break;
+            }
         }
     }
 }
