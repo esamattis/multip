@@ -209,7 +209,7 @@ fn poll_signals(tx: &Channel) {
 }
 
 fn main() {
-    log!("start with pid {}", id());
+    log!("Started multip with pid {}", id());
     let (tx, rx) = mpsc::channel::<Message>();
 
     trap_signal(signal::SIGINT);
