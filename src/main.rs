@@ -1,9 +1,13 @@
+#[macro_use]
+extern crate lazy_static;
+
 use libc::c_int;
 use nix::sys::signal;
 use nix::sys::signal::kill;
 use nix::sys::signal::Signal;
 use nix::sys::signal::{signal as trap_os, SigHandler};
 use nix::unistd::Pid;
+use std::convert::TryFrom;
 use std::env;
 use std::fmt;
 use std::io::Read;
@@ -12,6 +16,7 @@ use std::marker::Send;
 use std::process::{id, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::mpsc;
+use std::sync::{Arc, Condvar, Mutex};
 use std::{thread, time};
 
 macro_rules! log {
@@ -25,13 +30,20 @@ macro_rules! log {
 }
 
 // Store last received signal here
-static SIGNAL: AtomicI32 = AtomicI32::new(0);
+
+lazy_static! {
+    static ref SIGNAL: Arc<(Mutex<c_int>, Condvar)> = Arc::new((Mutex::new(0), Condvar::new()));
+}
 
 fn int_to_sig(i: i32) -> Signal {
     match i {
         2 => Signal::SIGINT,
         3 => Signal::SIGQUIT,
         15 => Signal::SIGTERM,
+        17 => {
+            log!("Converting CHLD to SIGTERM");
+            Signal::SIGTERM
+        }
         sig => {
             panic!("Parent received unkown signal {}", sig);
         }
@@ -129,6 +141,8 @@ impl MultipChild<'_> {
         let name = self.name.to_string();
         thread::spawn(move || {
             let res = cmd.wait().expect("exit failed");
+            log!("exited {}", res);
+            thread::sleep(time::Duration::from_millis(1000));
             tx.send(Message::Exit(name, res)).unwrap();
         });
     }
@@ -163,8 +177,10 @@ fn command_with_name(s: &String) -> (&str, &str) {
 }
 
 extern "C" fn handle_os_signal(s: c_int) {
-    // Just store the signal to avoid unsafety issues
-    SIGNAL.store(s as i32, Ordering::SeqCst);
+    let (signal_lock, cvar) = &*SIGNAL.clone();
+    let mut current_signal = signal_lock.lock().expect("signal fail");
+    *current_signal = s;
+    cvar.notify_one();
 }
 
 fn trap_signal(s: Signal) {
@@ -179,31 +195,50 @@ fn poll_signals(tx: &Channel) {
     thread::spawn(move || {
         let mut sigint_count = 0;
         loop {
-            let sig = SIGNAL.swap(0, Ordering::SeqCst);
+            log!("wating lock");
+            let (signal_lock, cvar) = &*SIGNAL.clone();
+            let current_signal = signal_lock.lock().expect("poll fail");
+            let wat = cvar.wait(current_signal).expect("wait fail");
+            let sig = *wat;
+            log!("got lock {}", sig);
 
-            if sig != 0 {
-                let sig = int_to_sig(sig);
-
-                if sig == Signal::SIGINT {
-                    sigint_count += 1;
-                }
-
-                match sigint_count {
-                    2 => {
-                        log!("Got second SIGINT, converting it to SIGTERM...");
-                        tx.send(Message::ParentSignal(Signal::SIGTERM)).unwrap();
-                    }
-                    3 => {
-                        log!("Got third SIGINT, converting it to SIGKILL...");
-                        tx.send(Message::ParentSignal(Signal::SIGKILL)).unwrap();
-                    }
-                    _ => {
-                        tx.send(Message::ParentSignal(sig)).unwrap();
-                    }
-                }
+            if sig == 0 {
+                log!("weird signal");
+                continue;
             }
 
-            thread::sleep(time::Duration::from_millis(100));
+            let try_sig = Signal::try_from(sig);
+            let sig = match try_sig {
+                Ok(sig) => sig,
+                _ => {
+                    log!("Signal parsing failed");
+                    continue;
+                }
+            };
+
+            if sig == Signal::SIGCHLD {
+                log!("Got SIGCHLD! Sending SIGTERM to others...");
+                tx.send(Message::ParentSignal(Signal::SIGINT)).unwrap();
+                continue;
+            }
+
+            if sig == Signal::SIGINT {
+                sigint_count += 1;
+            }
+
+            match sigint_count {
+                2 => {
+                    log!("Got second SIGINT, converting it to SIGTERM...");
+                    tx.send(Message::ParentSignal(Signal::SIGTERM)).unwrap();
+                }
+                3 => {
+                    log!("Got third SIGINT, converting it to SIGKILL...");
+                    tx.send(Message::ParentSignal(Signal::SIGKILL)).unwrap();
+                }
+                _ => {
+                    tx.send(Message::ParentSignal(sig)).unwrap();
+                }
+            }
         }
     });
 }
@@ -215,6 +250,7 @@ fn main() {
     trap_signal(signal::SIGINT);
     trap_signal(signal::SIGTERM);
     trap_signal(signal::SIGQUIT);
+    trap_signal(signal::SIGCHLD);
     poll_signals(&tx);
 
     let args: Vec<String> = env::args().collect();
@@ -279,7 +315,6 @@ fn main() {
             }
             _ => {
                 println!("Unhandled remaining message...");
-                break;
             }
         }
     }

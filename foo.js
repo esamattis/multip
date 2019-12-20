@@ -4,10 +4,12 @@ console.log(`start ${pid}`);
 
 process.on("SIGINT", () => {
     console.log("Received SIGINT.");
+    process.exit(2);
 });
 
 process.on("SIGTERM", () => {
     console.log("Received SIGTERM.");
+    process.exit(4);
 });
 
 function rand() {
