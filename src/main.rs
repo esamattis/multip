@@ -177,10 +177,9 @@ fn command_with_name(s: &String) -> (&str, &str) {
 }
 
 extern "C" fn handle_os_signal(s: c_int) {
-    let (signal_lock, cvar) = &*SIGNAL.clone();
-    let mut current_signal = signal_lock.lock().expect("signal fail");
+    let mut current_signal = SIGNAL.lock().expect("signal fail");
     *current_signal = s;
-    cvar.notify_one();
+    CONDVAR.notify_one();
 }
 
 fn trap_signal(s: Signal) {
@@ -195,11 +194,10 @@ fn poll_signals(tx: &Channel) {
     thread::spawn(move || {
         let mut sigint_count = 0;
         loop {
-            log!("wating lock");
-            let (signal_lock, cvar) = &*SIGNAL.clone();
-            let current_signal = signal_lock.lock().expect("poll fail");
-            let wat = cvar.wait(current_signal).expect("wait fail");
-            let sig = *wat;
+            log!("waiting lock lock");
+            let current_signal = SIGNAL.lock().expect("signal fail");
+            log!("waiting condvar");
+            let sig = *CONDVAR.wait(current_signal).expect("wait fail");
             log!("got lock {}", sig);
 
             if sig == 0 {
