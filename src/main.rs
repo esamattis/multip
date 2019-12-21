@@ -32,22 +32,8 @@ macro_rules! log {
 // Store last received signal here
 
 lazy_static! {
-    static ref SIGNAL: Arc<(Mutex<c_int>, Condvar)> = Arc::new((Mutex::new(0), Condvar::new()));
-}
-
-fn int_to_sig(i: i32) -> Signal {
-    match i {
-        2 => Signal::SIGINT,
-        3 => Signal::SIGQUIT,
-        15 => Signal::SIGTERM,
-        17 => {
-            log!("Converting CHLD to SIGTERM");
-            Signal::SIGTERM
-        }
-        sig => {
-            panic!("Parent received unkown signal {}", sig);
-        }
-    }
+    static ref SIGNAL: Arc<Mutex<c_int>> = Arc::new(Mutex::new(0));
+    static ref CONDVAR: Arc<Condvar> = Arc::new(Condvar::new());
 }
 
 struct Line {
@@ -63,7 +49,6 @@ impl fmt::Display for Line {
 
 enum Message {
     Line(Line),
-    Exit(String, std::process::ExitStatus),
     ParentSignal(Signal),
 }
 
@@ -71,15 +56,15 @@ type Channel = std::sync::mpsc::Sender<Message>;
 
 struct MultipChild<'a> {
     name: &'a str,
-    pid: Pid,
     kill_sent: Option<Signal>,
-    exit_status: Option<ExitStatus>,
+    death_handled: bool,
     tx: &'a Channel,
+    cmd: std::process::Child,
 }
 
 impl fmt::Display for MultipChild<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}({})", self.name, self.pid)
+        write!(f, "{}({})", self.name, self.cmd.id())
     }
 }
 
@@ -98,22 +83,19 @@ impl MultipChild<'_> {
         let stdout = cmd.stdout.take().expect("failed to take stdout");
         let stderr = cmd.stderr.take().expect("failed to take stderr");
 
-        let pid = cmd.id() as i32;
+        let pid = cmd.id();
         log!("Started [{}] with pid {}", name, pid);
-
-        let pid = Pid::from_raw(pid);
 
         let child = MultipChild {
             name,
             tx,
-            pid,
-            exit_status: None,
+            cmd,
+            death_handled: false,
             kill_sent: None,
         };
 
         child.monitor_ouput(stdout);
         child.monitor_ouput(stderr);
-        child.monitor_for_exit(cmd);
 
         child
     }
@@ -130,21 +112,19 @@ impl MultipChild<'_> {
         }
 
         self.kill_sent = Some(sig);
-        log!("Sending {} to {}({})", sig, self.name, self.pid);
-        if kill(self.pid, sig).is_err() {
+
+        let pid = nix::unistd::Pid::from_raw(self.cmd.id() as i32);
+
+        log!("Sending {} to {}({})", sig, self.name, pid);
+        if kill(pid, sig).is_err() {
             log!("kill failed for {}", self.name);
         }
     }
 
-    fn monitor_for_exit(&self, mut cmd: std::process::Child) {
-        let tx = mpsc::Sender::clone(self.tx);
-        let name = self.name.to_string();
-        thread::spawn(move || {
-            let res = cmd.wait().expect("exit failed");
-            log!("exited {}", res);
-            thread::sleep(time::Duration::from_millis(1000));
-            tx.send(Message::Exit(name, res)).unwrap();
-        });
+    fn handle_death(&mut self) -> bool {
+        let is_new = !self.death_handled && !self.is_alive();
+        self.death_handled = true;
+        is_new
     }
 
     fn monitor_ouput(&self, stream: impl Read + Send + 'static) -> std::thread::JoinHandle<()> {
@@ -159,8 +139,15 @@ impl MultipChild<'_> {
         })
     }
 
-    fn is_alive(&self) -> bool {
-        self.exit_status.is_none()
+    fn is_alive(&mut self) -> bool {
+        match self.cmd.try_wait() {
+            Ok(Some(_)) => return false,
+            Ok(None) => return true,
+            _ => {
+                log!("Failed to read exit status");
+                false
+            }
+        }
     }
 }
 
@@ -214,22 +201,16 @@ fn poll_signals(tx: &Channel) {
                 }
             };
 
-            if sig == Signal::SIGCHLD {
-                log!("Got SIGCHLD! Sending SIGTERM to others...");
-                tx.send(Message::ParentSignal(Signal::SIGINT)).unwrap();
-                continue;
-            }
-
             if sig == Signal::SIGINT {
                 sigint_count += 1;
             }
 
-            match sigint_count {
-                2 => {
+            match (sig, sigint_count) {
+                (Signal::SIGINT, 2) => {
                     log!("Got second SIGINT, converting it to SIGTERM...");
                     tx.send(Message::ParentSignal(Signal::SIGTERM)).unwrap();
                 }
-                3 => {
+                (Signal::SIGINT, 3) => {
                     log!("Got third SIGINT, converting it to SIGKILL...");
                     tx.send(Message::ParentSignal(Signal::SIGKILL)).unwrap();
                 }
@@ -260,27 +241,24 @@ fn main() {
         children.push(child)
     }
 
-    let mut killall: Option<Signal> = None;
-
     for msg in &rx {
+        let mut forward_signal: Option<Signal> = None;
+
         match msg {
-            Message::Exit(name, exit_status) => {
-                log!("{} exited with {}", name, exit_status);
-                for ding in children.iter_mut() {
-                    if ding.name == name {
-                        ding.exit_status = Some(exit_status);
+            Message::ParentSignal(Signal::SIGCHLD) => {
+                log!("Got SIGCHLD. Looking for dead child");
+                for child in children.iter_mut() {
+                    if child.handle_death() {
+                        log!("{} has died", child);
+                        forward_signal = Some(Signal::SIGTERM);
                     }
-                }
-                if killall.is_none() {
-                    log!("First child died. Bringing all down with SIGTERM.");
-                    killall = Some(Signal::SIGTERM);
                 }
             }
             Message::ParentSignal(parent_signal) => {
-                if killall.is_none() {
-                    log!("Parent got signal {}", parent_signal);
+                if forward_signal.is_none() {
+                    log!("Forwarding parent signal {} to children", parent_signal);
                 }
-                killall = Some(parent_signal);
+                forward_signal = Some(parent_signal);
             }
             Message::Line(line) => {
                 println!("{}", line);
@@ -290,7 +268,7 @@ fn main() {
         let mut somebody_is_alive = false;
 
         for child in children.iter_mut() {
-            if let Some(sig) = killall {
+            if let Some(sig) = forward_signal {
                 child.kill(sig);
             }
 
