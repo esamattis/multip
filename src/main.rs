@@ -38,12 +38,12 @@ lazy_static! {
 
 struct Line {
     name: String,
-    line: Result<String, std::io::Error>,
+    line: String,
 }
 
 impl fmt::Display for Line {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{}] {}", self.name, self.line.as_ref().unwrap().trim())
+        write!(f, "[{}] {}", self.name, self.line.trim())
     }
 }
 
@@ -131,10 +131,28 @@ impl MultipChild<'_> {
         let name = self.name.to_string();
         let tx = mpsc::Sender::clone(self.tx);
         thread::spawn(move || {
-            let buf = BufReader::new(stream);
-            for line in buf.lines() {
+            let mut buf = BufReader::new(stream);
+
+            loop {
                 let name = name.to_string();
-                tx.send(Message::Line(Line { name, line })).unwrap();
+                let mut line = String::new();
+                let res = buf.read_line(&mut line);
+                match res {
+                    Ok(0) => {
+                        // EOF
+                        return;
+                    }
+                    Ok(_) => {
+                        tx.send(Message::Line(Line { name, line })).unwrap();
+                    }
+                    Err(msg) => {
+                        tx.send(Message::Line(Line {
+                            name,
+                            line: format!("Failed to parse line. Error {}", msg),
+                        }))
+                        .unwrap();
+                    }
+                }
             }
         })
     }
