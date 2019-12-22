@@ -193,9 +193,10 @@ fn trap_signal(s: Signal) {
 }
 
 // Poll for the sotred signal and send it back via the channel
-fn poll_signals(tx: &Channel) {
-    let tx = mpsc::Sender::clone(tx);
-
+fn poll_signals<F>(cb: F)
+where
+    F: 'static + Send + Fn(Signal) -> (),
+{
     thread::spawn(move || {
         let mut sigint_count = 0;
         loop {
@@ -226,14 +227,17 @@ fn poll_signals(tx: &Channel) {
             match (sig, sigint_count) {
                 (Signal::SIGINT, 2) => {
                     log!("Got second SIGINT, converting it to SIGTERM...");
-                    tx.send(Message::ParentSignal(Signal::SIGTERM)).unwrap();
+                    cb(Signal::SIGTERM);
+                    // tx.send(Message::ParentSignal(Signal::SIGTERM)).unwrap();
                 }
                 (Signal::SIGINT, 3) => {
                     log!("Got third SIGINT, converting it to SIGKILL...");
-                    tx.send(Message::ParentSignal(Signal::SIGKILL)).unwrap();
+                    cb(Signal::SIGKILL);
+                    // tx.send(Message::ParentSignal(Signal::SIGKILL)).unwrap();
                 }
                 _ => {
-                    tx.send(Message::ParentSignal(sig)).unwrap();
+                    cb(sig);
+                    // tx.send(Message::ParentSignal(sig)).unwrap();
                 }
             }
         }
@@ -248,7 +252,11 @@ fn main() {
     trap_signal(signal::SIGTERM);
     trap_signal(signal::SIGQUIT);
     trap_signal(signal::SIGCHLD);
-    poll_signals(&tx);
+
+    let t = mpsc::Sender::clone(&tx);
+    poll_signals(move |sig| {
+        t.send(Message::ParentSignal(sig)).unwrap();
+    });
 
     let args: Vec<String> = env::args().collect();
     let mut children: Vec<MultipChild> = Vec::new();
