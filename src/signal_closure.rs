@@ -31,49 +31,24 @@ pub fn poll_signals<F>(cb: F)
 where
     F: 'static + Send + Fn(Signal) -> (),
 {
-    thread::spawn(move || {
-        let mut sigint_count = 0;
-        loop {
-            log!("waiting lock lock");
-            let current_signal = SIGNAL.lock().expect("signal fail");
-            log!("waiting condvar");
-            let sig = *CONDVAR.wait(current_signal).expect("wait fail");
-            log!("got lock {}", sig);
+    thread::spawn(move || loop {
+        let current_signal = SIGNAL.lock().expect("signal fail");
+        let sig = *CONDVAR.wait(current_signal).expect("wait fail");
 
-            if sig == 0 {
-                log!("weird signal");
+        if sig == 0 {
+            log!("Got weird signal 0");
+            continue;
+        }
+
+        let try_sig = Signal::try_from(sig);
+        let sig = match try_sig {
+            Ok(sig) => sig,
+            _ => {
+                log!("Signal parsing failed");
                 continue;
             }
+        };
 
-            let try_sig = Signal::try_from(sig);
-            let sig = match try_sig {
-                Ok(sig) => sig,
-                _ => {
-                    log!("Signal parsing failed");
-                    continue;
-                }
-            };
-
-            if sig == Signal::SIGINT {
-                sigint_count += 1;
-            }
-
-            match (sig, sigint_count) {
-                (Signal::SIGINT, 2) => {
-                    log!("Got second SIGINT, converting it to SIGTERM...");
-                    cb(Signal::SIGTERM);
-                    // tx.send(Message::ParentSignal(Signal::SIGTERM)).unwrap();
-                }
-                (Signal::SIGINT, 3) => {
-                    log!("Got third SIGINT, converting it to SIGKILL...");
-                    cb(Signal::SIGKILL);
-                    // tx.send(Message::ParentSignal(Signal::SIGKILL)).unwrap();
-                }
-                _ => {
-                    cb(sig);
-                    // tx.send(Message::ParentSignal(sig)).unwrap();
-                }
-            }
-        }
+        cb(sig);
     });
 }

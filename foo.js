@@ -19,7 +19,6 @@ process.on("SIGUSR1", () => {
 });
 
 setTimeout(() => {
-    console.log("crappppp");
     process.stdout.write(execSync("head -c 100 /dev/urandom"));
 }, 1000);
 

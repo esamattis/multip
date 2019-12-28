@@ -11,7 +11,6 @@ use std::sync::mpsc;
 use std::thread;
 
 mod log;
-
 mod signal_closure;
 
 struct Line {
@@ -183,24 +182,42 @@ fn main() {
     }
 
     let mut killall: Option<Signal> = None;
+    let mut sigint_count = 0;
 
     for msg in &rx {
+        // Look for dead chilren on every event
+        for child in children.iter_mut() {
+            if child.handle_death() {
+                log!("{} has died. Killing all other children too.", child);
+                killall = Some(Signal::SIGTERM);
+            }
+        }
+
         match msg {
             Message::ParentSignal(Signal::SIGCHLD) => {
-                log!("Got SIGCHLD. Looking for dead child");
-                for child in children.iter_mut() {
-                    if child.handle_death() {
-                        log!("{} has died", child);
-                        killall = Some(Signal::SIGTERM);
-                    }
+                // no-op signal just for looking dead children
+            }
+
+            Message::ParentSignal(Signal::SIGINT) => {
+                killall = Some(Signal::SIGINT);
+                sigint_count += 1;
+
+                if sigint_count == 2 {
+                    log!("Got second SIGINT, converting it to SIGKILL");
+                    killall = Some(Signal::SIGTERM);
+                } else if sigint_count > 2 {
+                    log!("Got third SIGINT, converting it to SIGKILL");
+                    killall = Some(Signal::SIGKILL);
                 }
             }
+
             Message::ParentSignal(parent_signal) => {
                 if killall.is_none() {
                     log!("Forwarding parent signal {} to children", parent_signal);
                 }
                 killall = Some(parent_signal);
             }
+
             Message::Line(line) => {
                 println!("{}", line);
             }
