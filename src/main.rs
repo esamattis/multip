@@ -267,24 +267,24 @@ fn main() {
         children.push(child)
     }
 
-    for msg in &rx {
-        let mut forward_signal: Option<Signal> = None;
+    let mut killall: Option<Signal> = None;
 
+    for msg in &rx {
         match msg {
             Message::ParentSignal(Signal::SIGCHLD) => {
                 log!("Got SIGCHLD. Looking for dead child");
                 for child in children.iter_mut() {
                     if child.handle_death() {
                         log!("{} has died", child);
-                        forward_signal = Some(Signal::SIGTERM);
+                        killall = Some(Signal::SIGTERM);
                     }
                 }
             }
             Message::ParentSignal(parent_signal) => {
-                if forward_signal.is_none() {
+                if killall.is_none() {
                     log!("Forwarding parent signal {} to children", parent_signal);
                 }
-                forward_signal = Some(parent_signal);
+                killall = Some(parent_signal);
             }
             Message::Line(line) => {
                 println!("{}", line);
@@ -294,7 +294,7 @@ fn main() {
         let mut somebody_is_alive = false;
 
         for child in children.iter_mut() {
-            if let Some(sig) = forward_signal {
+            if let Some(sig) = killall {
                 child.kill(sig);
             }
 
