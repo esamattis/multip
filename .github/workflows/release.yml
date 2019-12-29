@@ -30,6 +30,7 @@ jobs:
             - name: Build with Cargo
               run: |
                   env
+                  echo "ref $GITHUB_REF"
                   cargo build --release --target x86_64-unknown-linux-musl
 
             - name: Optimize binary size
