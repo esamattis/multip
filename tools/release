@@ -20,6 +20,4 @@ git tag
 echo "New version without the 'v'"
 read -p "version> " version
 
-git tag -a "v$version" -m "v$version"
-git push
-git push --tags
+git push origin HEAD:release/v${version}
