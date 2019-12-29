@@ -185,17 +185,15 @@ fn main() {
     let mut sigint_count = 0;
 
     for msg in &rx {
-        // Look for dead chilren on every event
-        for child in children.iter_mut() {
-            if child.handle_death() {
-                log!("{} has died. Killing all other children too.", child);
-                killall = Some(Signal::SIGTERM);
-            }
-        }
-
         match msg {
             Message::ParentSignal(Signal::SIGCHLD) => {
                 // no-op signal just for looking dead children
+                for child in children.iter_mut() {
+                    if child.handle_death() {
+                        log!("{} has died. Killing all other children too.", child);
+                        killall = Some(Signal::SIGTERM);
+                    }
+                }
             }
 
             Message::ParentSignal(Signal::SIGINT) => {
