@@ -1,0 +1,22 @@
+{
+  "name": "guessing_game",
+  "version": "1.0.0",
+  "description": "Tiny multi process manager for containers written in Rust. For example if you want to run nginx and php-fpm in a single container.",
+  "main": "foo.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/esamattis/multip.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/esamattis/multip/issues"
+  },
+  "homepage": "https://github.com/esamattis/multip#readme",
+  "devDependencies": {
+    "bats": "^1.1.0"
+  }
+}
