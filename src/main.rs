@@ -153,7 +153,18 @@ fn command_with_name(s: &String) -> (&str, &str) {
 }
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    for command in args[1..].iter() {
+        if command == "--version" {
+            println!("version {}", option_env!("MULTIP_VERSION").unwrap_or("DEV"));
+            println!("git rev {}", option_env!("GITHUB_SHA").unwrap_or("DEV"));
+            return;
+        }
+    }
+
     log!("Started multip with pid {}", id());
+
     let (tx, rx) = mpsc::channel::<Message>();
 
     signal_closure::trap_signal(signal::SIGINT);
@@ -166,17 +177,10 @@ fn main() {
         t.send(Message::ParentSignal(sig)).unwrap();
     });
 
-    let args: Vec<String> = env::args().collect();
 
     let mut children: Vec<MultipChild> = Vec::new();
 
     for command in args[1..].iter() {
-        if command == "--version" {
-            println!("version {}", option_env!("MULTIP_VERSION").unwrap_or("DEV"));
-            println!("git rev {}", option_env!("GITHUB_SHA").unwrap_or("DEV"));
-            return;
-        }
-
         let (name, command) = command_with_name(command);
         let child = MultipChild::spawn(name, command, &tx);
         children.push(child)
