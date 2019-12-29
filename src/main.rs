@@ -167,6 +167,7 @@ impl Iterator for ProcessWaiter {
     type Item = (Pid, i32);
 
     fn next(&mut self) -> Option<Self::Item> {
+        // -1     meaning wait for any child process.
         // WNOHANG     return immediately if no child has exited.
         let status = waitpid(Pid::from_raw(-1), Some(WaitPidFlag::WNOHANG));
 
