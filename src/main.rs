@@ -167,6 +167,12 @@ fn main() {
     });
 
     let args: Vec<String> = env::args().collect();
+
+    if args[1] == "--version" {
+        println!("Version {}", option_env!("MULTIP_VERSION").unwrap_or("DEV"));
+        return
+    }
+
     let mut children: Vec<MultipChild> = Vec::new();
 
     for command in args[1..].iter() {

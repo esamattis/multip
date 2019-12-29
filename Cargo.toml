@@ -1,6 +1,6 @@
 [package]
 name = "multip"
-version = "0.1.0"
+version = "0.0.0"
 authors = ["Esa-Matti Suuronen <esa-matti@suuronen.org>"]
 edition = "2018"
 
