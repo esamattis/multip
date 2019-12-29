@@ -20,7 +20,7 @@ jobs:
               with:
                   node-version: 12
 
-            - name: Add x86_64-unknown-linux-musl target
+            - name: Use Rust toolchain
               uses: actions-rs/toolchain@v1
               with:
                   target: x86_64-unknown-linux-musl
@@ -33,6 +33,11 @@ jobs:
                   echo "::set-env name=NEW_VERSION::${MULTIP_VERSION}"
                   echo "::set-env name=PREV_VERSION::$(git tag --sort=committerdate --list 'v[0-9]*' | tail -n 1)"
                   cargo build --release --target x86_64-unknown-linux-musl
+
+            - name: Run tests
+              run: |
+                  npm ci
+                  npm test
 
             - name: Optimize binary size
               run: strip ${{ env.binary_path }}
