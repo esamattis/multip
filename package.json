@@ -1,5 +1,5 @@
 {
-    "name": "guessing_game",
+    "name": "multip",
     "version": "1.0.0",
     "description": "Tiny multi process manager for containers written in Rust. For example if you want to run nginx and php-fpm in a single container.",
     "main": "foo.js",
