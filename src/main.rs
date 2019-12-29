@@ -139,7 +139,7 @@ impl MultipChild<'_> {
             Ok(Some(_)) => return false,
             Ok(None) => return true,
             _ => {
-                log!("Failed to read exit status");
+                log!("Failed to read exit status for {}", self);
                 false
             }
         }
