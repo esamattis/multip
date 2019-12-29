@@ -36,9 +36,9 @@ jobs:
 
                   strip ${{ env.BINARY_PATH }}
 
-                  npm ci
-                  npm test
 
+              #   npm ci
+              #   npm test
             - name: Create Gitub Release
               id: create_release
               uses: actions/create-release@v1.0.0
