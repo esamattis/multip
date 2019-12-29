@@ -1,11 +1,7 @@
-use nix::errno::Errno;
 use nix::sys::signal;
 use nix::sys::signal::kill;
 use nix::sys::signal::Signal;
-use nix::sys::wait::WaitStatus::{Exited, StillAlive};
-use nix::sys::wait::{waitpid, WaitPidFlag};
 use nix::unistd::Pid;
-use nix::Error::Sys;
 use std::env;
 use std::fmt;
 use std::io::Read;
@@ -17,6 +13,7 @@ use std::thread;
 
 mod log;
 mod signal_closure;
+mod waitpid;
 
 struct Line {
     name: String,
@@ -155,45 +152,6 @@ fn command_with_name(s: &String) -> (&str, &str) {
     panic!("cannot parse name from> {}", s);
 }
 
-struct ProcessWaiter {}
-
-impl ProcessWaiter {
-    fn iter() -> ProcessWaiter {
-        ProcessWaiter {}
-    }
-}
-
-impl Iterator for ProcessWaiter {
-    type Item = (Pid, i32);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // -1     meaning wait for any child process.
-        // WNOHANG     return immediately if no child has exited.
-        let status = waitpid(Pid::from_raw(-1), Some(WaitPidFlag::WNOHANG));
-
-        match status {
-            Ok(Exited(pid, exit_code)) => Some((pid, exit_code)),
-
-            Ok(StillAlive) => None,
-
-            Ok(status) => {
-                log!("Unknown status from waitpid() {:#?}", status);
-                None
-            }
-
-            Err(Sys(Errno::ECHILD)) => {
-                // log!("No child processess");
-                None
-            }
-
-            Err(err) => {
-                log!("Failed to waitpid() {}", err);
-                None
-            }
-        }
-    }
-}
-
 fn main() {
     log!("Started multip with pid {}", id());
     let (tx, rx) = mpsc::channel::<Message>();
@@ -225,7 +183,7 @@ fn main() {
         let mut forward: Option<Signal> = None;
 
         // Look for dead chilren on every event
-        for (pid, exit_code) in ProcessWaiter::iter() {
+        for (pid, exit_code) in waitpid::iter_dead_children() {
             let child = children.iter_mut().find(|child| child.pid() == pid);
 
             match child {
