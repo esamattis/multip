@@ -12,10 +12,10 @@ if [ "$(git rev-parse --abbrev-ref HEAD)" != "master" ]; then
     exit 1
 fi
 
+git fetch
 git push origin master:master
 
-git tag
-
+git tag --sort=committerdate --list 'v[0-9]*'
 
 echo "New version without the 'v'"
 read -p "version> " version
