@@ -31,11 +31,9 @@ jobs:
               run: |
                   export MULTIP_VERSION="$(echo "$GITHUB_REF" | cut -d / -f 4)"
                   echo "::set-env name=NEW_VERSION::${MULTIP_VERSION}"
-                  echo "::set-env name=PREV_VERSION::$(git tag --sort=committerdate --list 'v[0-9]*' | tail -n 1)"
                   cargo build --release --target x86_64-unknown-linux-musl
 
                   strip ${{ env.BINARY_PATH }}
-
 
               #   npm ci
               #   npm test
@@ -47,10 +45,7 @@ jobs:
               with:
                   tag_name: ${{ env.NEW_VERSION }}
                   release_name: ${{ env.NEW_VERSION }}
-                  body: |
-                      All changes
-                      https://github.com/esamattis/multip/compare/${{ env.PREV_VERSION }}...${{ env.NEW_VERSION }}
-
+                  body: Changelog WIP
                   draft: false
                   prerelease: false
 
