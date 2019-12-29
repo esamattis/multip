@@ -91,6 +91,7 @@ impl MultipChild<'_> {
             return;
         }
 
+        // Don't send the same signal twice
         if let Some(prev) = self.kill_sent {
             if prev == sig {
                 return;
@@ -216,9 +217,12 @@ fn main() {
     }
 
     let mut killall: Option<Signal> = None;
+
     let mut sigint_count = 0;
 
     for msg in &rx {
+        let mut forward: Option<Signal> = None;
+
         // Look for dead chilren on every event
         for (pid, exit_code) in ProcessWaiter::iter() {
             let child = children.iter_mut().find(|child| child.pid() == pid);
@@ -227,7 +231,10 @@ fn main() {
                 Some(child) => {
                     log!("Child {} died with exit code {}", child, exit_code);
                     child.is_dead = true;
-                    killall = Some(Signal::SIGTERM);
+                    if killall.is_none() {
+                        log!("Killing all other children too");
+                        killall = Some(Signal::SIGTERM);
+                    }
                 }
                 None => {
                     log!("Unknown process({}) died with exit code {}", pid, exit_code);
@@ -241,23 +248,21 @@ fn main() {
             }
 
             Message::ParentSignal(Signal::SIGINT) => {
-                killall = Some(Signal::SIGINT);
+                forward = Some(Signal::SIGINT);
                 sigint_count += 1;
 
                 if sigint_count == 2 {
                     log!("Got second SIGINT, converting it to SIGKILL");
-                    killall = Some(Signal::SIGTERM);
+                    forward = Some(Signal::SIGTERM);
                 } else if sigint_count > 2 {
                     log!("Got third SIGINT, converting it to SIGKILL");
-                    killall = Some(Signal::SIGKILL);
+                    forward = Some(Signal::SIGKILL);
                 }
             }
 
             Message::ParentSignal(parent_signal) => {
-                if killall.is_none() {
-                    log!("Forwarding parent signal {} to children", parent_signal);
-                }
-                killall = Some(parent_signal);
+                log!("Forwarding parent signal {} to children", parent_signal);
+                forward = Some(parent_signal);
             }
 
             Message::Line(line) => {
@@ -268,6 +273,10 @@ fn main() {
         let mut somebody_is_alive = false;
 
         for child in children.iter_mut() {
+            if let Some(sig) = forward {
+                child.kill(sig);
+            }
+
             if let Some(sig) = killall {
                 child.kill(sig);
             }
