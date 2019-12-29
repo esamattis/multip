@@ -1,6 +1,11 @@
+use nix::errno::Errno;
 use nix::sys::signal;
 use nix::sys::signal::kill;
 use nix::sys::signal::Signal;
+use nix::sys::wait::WaitStatus::{Exited, StillAlive};
+use nix::sys::wait::{waitpid, WaitPidFlag};
+use nix::unistd::Pid;
+use nix::Error::Sys;
 use std::env;
 use std::fmt;
 use std::io::Read;
@@ -34,7 +39,7 @@ type Channel = std::sync::mpsc::Sender<Message>;
 struct MultipChild<'a> {
     name: &'a str,
     kill_sent: Option<Signal>,
-    death_handled: bool,
+    is_dead: bool,
     tx: &'a Channel,
     cmd: std::process::Child,
 }
@@ -67,7 +72,7 @@ impl MultipChild<'_> {
             name,
             tx,
             cmd,
-            death_handled: false,
+            is_dead: false,
             kill_sent: None,
         };
 
@@ -75,6 +80,10 @@ impl MultipChild<'_> {
         child.monitor_ouput(stderr);
 
         child
+    }
+
+    fn pid(&self) -> Pid {
+        nix::unistd::Pid::from_raw(self.cmd.id() as i32)
     }
 
     fn kill(&mut self, sig: Signal) {
@@ -90,18 +99,12 @@ impl MultipChild<'_> {
 
         self.kill_sent = Some(sig);
 
-        let pid = nix::unistd::Pid::from_raw(self.cmd.id() as i32);
+        let pid = self.pid();
 
         log!("Sending {} to {}({})", sig, self.name, pid);
         if kill(pid, sig).is_err() {
             log!("kill failed for {}", self.name);
         }
-    }
-
-    fn handle_death(&mut self) -> bool {
-        let is_new = !self.death_handled && !self.is_alive();
-        self.death_handled = true;
-        is_new
     }
 
     fn monitor_ouput(&self, stream: impl Read + Send + 'static) -> std::thread::JoinHandle<()> {
@@ -134,15 +137,8 @@ impl MultipChild<'_> {
         })
     }
 
-    fn is_alive(&mut self) -> bool {
-        match self.cmd.try_wait() {
-            Ok(Some(_)) => return false,
-            Ok(None) => return true,
-            _ => {
-                log!("Failed to read exit status for {}", self);
-                false
-            }
-        }
+    fn is_alive(&self) -> bool {
+        !self.is_dead
     }
 }
 
@@ -156,6 +152,44 @@ fn command_with_name(s: &String) -> (&str, &str) {
     }
 
     panic!("cannot parse name from> {}", s);
+}
+
+struct ProcessWaiter {}
+
+impl ProcessWaiter {
+    fn iter() -> ProcessWaiter {
+        ProcessWaiter {}
+    }
+}
+
+impl Iterator for ProcessWaiter {
+    type Item = (Pid, i32);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // WNOHANG     return immediately if no child has exited.
+        let status = waitpid(Pid::from_raw(-1), Some(WaitPidFlag::WNOHANG));
+
+        match status {
+            Ok(Exited(pid, exit_code)) => Some((pid, exit_code)),
+
+            Ok(StillAlive) => None,
+
+            Ok(status) => {
+                log!("Unknown status from waitpid() {:#?}", status);
+                None
+            }
+
+            Err(Sys(Errno::ECHILD)) => {
+                // log!("No child processess");
+                None
+            }
+
+            Err(err) => {
+                log!("Failed to waitpid() {}", err);
+                None
+            }
+        }
+    }
 }
 
 fn main() {
@@ -185,15 +219,25 @@ fn main() {
     let mut sigint_count = 0;
 
     for msg in &rx {
+        // Look for dead chilren on every event
+        for (pid, exit_code) in ProcessWaiter::iter() {
+            let child = children.iter_mut().find(|child| child.pid() == pid);
+
+            match child {
+                Some(child) => {
+                    log!("Child {} died with exit code {}", child, exit_code);
+                    child.is_dead = true;
+                    killall = Some(Signal::SIGTERM);
+                }
+                None => {
+                    log!("Unknown process({}) died with exit code {}", pid, exit_code);
+                }
+            }
+        }
+
         match msg {
             Message::ParentSignal(Signal::SIGCHLD) => {
                 // no-op signal just for looking dead children
-                for child in children.iter_mut() {
-                    if child.handle_death() {
-                        log!("{} has died. Killing all other children too.", child);
-                        killall = Some(Signal::SIGTERM);
-                    }
-                }
             }
 
             Message::ParentSignal(Signal::SIGINT) => {
