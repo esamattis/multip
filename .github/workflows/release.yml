@@ -6,7 +6,7 @@ on:
 name: Make Release
 
 env:
-    binary_path: target/x86_64-unknown-linux-musl/release/multip
+    BINARY_PATH: target/x86_64-unknown-linux-musl/release/multip
 
 jobs:
     build_and_test:
@@ -40,7 +40,7 @@ jobs:
                   npm test
 
             - name: Optimize binary size
-              run: strip ${{ env.binary_path }}
+              run: strip ${{ env.BINARY_PATH }}
 
             - name: Create Gitub Release
               id: create_release
@@ -68,6 +68,6 @@ jobs:
                   # include a `upload_url`. See this blog post for more info:
                   # https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
                   upload_url: ${{ steps.create_release.outputs.upload_url }}
-                  asset_path: ${{ env.binary_path }}
+                  asset_path: ${{ env.BINARY_PATH }}
                   asset_name: multip-amd64
                   asset_content_type: application/octet-stream
