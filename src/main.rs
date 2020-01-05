@@ -9,7 +9,9 @@ use std::io::{BufRead, BufReader};
 use std::marker::Send;
 use std::process::{id, Command, Stdio};
 use std::sync::mpsc;
+use std::sync::mpsc::RecvTimeoutError;
 use std::thread;
+use std::time::Duration;
 
 mod log;
 mod signal_closure;
@@ -189,7 +191,10 @@ fn main() {
 
     let mut sigint_count = 0;
 
-    for msg in &rx {
+    loop {
+        // Manually check for dead children with the given timeout
+        let msg = rx.recv_timeout(Duration::from_millis(100));
+
         let mut forward: Option<Signal> = None;
 
         // Look for dead chilren on every event
@@ -212,11 +217,15 @@ fn main() {
         }
 
         match msg {
-            Message::ParentSignal(Signal::SIGCHLD) => {
+            Err(RecvTimeoutError::Timeout) => {
+                // loop tick
+            }
+
+            Ok(Message::ParentSignal(Signal::SIGCHLD)) => {
                 // no-op signal just for looking dead children
             }
 
-            Message::ParentSignal(Signal::SIGINT) => {
+            Ok(Message::ParentSignal(Signal::SIGINT)) => {
                 forward = Some(Signal::SIGINT);
                 sigint_count += 1;
 
@@ -229,13 +238,18 @@ fn main() {
                 }
             }
 
-            Message::ParentSignal(parent_signal) => {
+            Ok(Message::ParentSignal(parent_signal)) => {
                 log!("Forwarding parent signal {} to children", parent_signal);
                 forward = Some(parent_signal);
             }
 
-            Message::Line(line) => {
+            Ok(Message::Line(line)) => {
                 println!("{}", line);
+            }
+
+            Err(RecvTimeoutError::Disconnected) => {
+                println!("Channel disconnected");
+                break;
             }
         }
 
