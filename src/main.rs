@@ -13,6 +13,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::thread;
 use std::time::Duration;
 
+mod line_reader;
 mod log;
 mod signal_closure;
 mod waitpid;
