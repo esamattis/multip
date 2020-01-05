@@ -177,7 +177,6 @@ fn main() {
         t.send(Message::ParentSignal(sig)).unwrap();
     });
 
-
     let mut children: Vec<MultipChild> = Vec::new();
 
     for command in args[1..].iter() {

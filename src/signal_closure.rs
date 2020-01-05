@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use libc::c_int;
 use nix::sys::signal::Signal;
-use nix::sys::signal::{signal as trap_os, SigHandler};
+use nix::sys::signal::{sigaction, SaFlags, SigAction, SigHandler, SigSet};
 use std::convert::TryFrom;
 use std::marker::Send;
 use std::sync::{Arc, Condvar, Mutex};
@@ -23,7 +23,15 @@ extern "C" fn handle_os_signal(s: c_int) {
 
 pub fn trap_signal(s: Signal) {
     let handler = SigHandler::Handler(handle_os_signal);
-    unsafe { trap_os(s, handler) }.unwrap();
+
+    // https://www.gnu.org/software/libc/manual/html_node/Flags-for-Sigaction.html
+    let sa_flags = SaFlags::SA_RESTART;
+
+    // Block all other signals while the signal handler is executing
+    let sig_set = SigSet::all();
+
+    unsafe { sigaction(s, &SigAction::new(handler, sa_flags, sig_set)) }
+        .expect("Failed to set signal handler");
 }
 
 // Poll for the sotred signal and send it back via the channel
