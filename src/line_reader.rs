@@ -127,6 +127,7 @@ impl<R: Read> SafeLineReader<R> {
                             if let Err(err) = res {
                                 Status::Error(i + 1, err)
                             } else if self.sent_partial {
+                                self.sent_partial = false;
                                 Status::Partial(i + 1)
                             } else {
                                 Status::Full(i + 1)
@@ -141,6 +142,7 @@ impl<R: Read> SafeLineReader<R> {
                             if let Err(err) = res {
                                 Status::Error(i + 1, err)
                             } else {
+                                self.sent_partial = true;
                                 Status::Partial(remaining)
                             }
                         }
@@ -157,6 +159,7 @@ impl<R: Read> SafeLineReader<R> {
                             if let Err(err) = res {
                                 Status::Error(space_available, err)
                             } else {
+                                self.sent_partial = true;
                                 Status::Partial(space_available)
                             }
                         } else {
@@ -178,17 +181,14 @@ impl<R: Read> SafeLineReader<R> {
             match status {
                 Status::Full(used) => {
                     self.inner.consume(used);
-                    self.sent_partial = false;
                     return Ok(Line::FullLine(buf));
                 }
                 Status::Partial(used) => {
                     self.inner.consume(used);
-                    self.sent_partial = true;
                     return Ok(Line::PartialLine(buf));
                 }
                 Status::Missing(used) => {
                     if used == 0 {
-                        self.sent_partial = false;
                         return Ok(Line::EOF(buf));
                     }
                     self.inner.consume(used);
@@ -371,4 +371,23 @@ fn long_line_with_large_buffer() {
 
     let s = get_partial_line(reader.read_line().unwrap());
     assert_eq!(s, "abcde");
+}
+
+#[test]
+fn long_line_in_the_middle() {
+    let in_buf: &[u8] = b"foo\nlong stuff\nbar\n";
+    let mut reader = SafeLineReader::new(BufReader::with_capacity(1000, in_buf), 5);
+
+    let s = get_full_line(reader.read_line().unwrap());
+    assert_eq!(s, "foo\n");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "long ");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "stuff\n");
+
+    let s = get_full_line(reader.read_line().unwrap());
+    assert_eq!(s, "bar\n");
+
 }
