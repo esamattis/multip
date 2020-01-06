@@ -283,8 +283,8 @@ fn main() {
             Message::Line(line) => {
                 println!("{}", line);
             }
-            _ => {
-                println!("Unhandled remaining message...");
+            Message::ParentSignal(_) => {
+                // Ignore signals on exit
             }
         }
     }
