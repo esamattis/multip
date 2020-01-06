@@ -27,7 +27,7 @@ impl fmt::Display for Line {
         match &self.line {
             Err(err) => write!(f, "<{}> Error: {}", self.name, err),
             Ok(line_reader::Line::PartialLine(s)) => {
-                write!(f, "[{}<Partial>] {}", self.name, s.trim())
+                write!(f, "[{}...] {}", self.name, s.trim())
             }
             Ok(line_reader::Line::EOF(s)) => write!(f, "[{}<EOF>] {}", self.name, s.trim()),
             Ok(line_reader::Line::FullLine(s)) => write!(f, "[{}] {}", self.name, s.trim()),
