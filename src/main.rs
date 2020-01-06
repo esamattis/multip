@@ -35,6 +35,16 @@ impl fmt::Display for Line {
     }
 }
 
+fn read_env_as_number<N>(env: &str, default: N) -> N
+where
+    N: std::str::FromStr,
+{
+    return env::var("MULTIP_MAX_LINE_LENGTH")
+        .unwrap_or(String::from("50"))
+        .parse::<N>()
+        .unwrap_or(default);
+}
+
 enum Message {
     Line(Line),
     ParentSignal(Signal),
@@ -119,7 +129,10 @@ impl MultipChild<'_> {
         let tx = mpsc::Sender::clone(self.tx);
         thread::spawn(move || {
             let buf = BufReader::new(stream);
-            let mut reader = line_reader::SafeLineReader::new(buf, 52);
+
+            let line_length = read_env_as_number("MULTIP_MAX_LINE_LENGTH", 1000);
+
+            let mut reader = line_reader::SafeLineReader::new(buf, line_length);
 
             loop {
                 let name = name.to_string();

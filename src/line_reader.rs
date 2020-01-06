@@ -85,12 +85,12 @@ enum Status {
 
 pub struct SafeLineReader<R> {
     inner: BufReader<R>,
-    max_line_size: isize,
+    max_line_size: usize,
     sent_partial: bool,
 }
 
 impl<R: Read> SafeLineReader<R> {
-    pub fn new(inner: BufReader<R>, max_line_size: isize) -> SafeLineReader<R> {
+    pub fn new(inner: BufReader<R>, max_line_size: usize) -> SafeLineReader<R> {
         SafeLineReader {
             inner,
             max_line_size,
@@ -110,9 +110,9 @@ impl<R: Read> SafeLineReader<R> {
                     Err(e) => return Err(e),
                 };
 
-                let overflow =
-                    self.max_line_size - (to_isize(buf.len()) + to_isize(available.len()));
-                let space_available = to_usize(self.max_line_size - to_isize(buf.len()));
+                let overflow = to_isize(self.max_line_size)
+                    - (to_isize(buf.len()) + to_isize(available.len()));
+                let space_available = to_usize(to_isize(self.max_line_size) - to_isize(buf.len()));
 
                 match memchr::memchr(b'\n', available) {
                     Some(i) => {
