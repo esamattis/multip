@@ -159,7 +159,7 @@ impl<R: Read> SafeLineReader<R> {
 fn get_full_line(s: Line) -> String {
     match s {
         Line::FullLine(s) => s,
-        _ => String::from("err"),
+        Line::PartialLine(s) => panic!("Expected full line but got partial with {}", s),
     }
 }
 
@@ -167,7 +167,7 @@ fn get_full_line(s: Line) -> String {
 fn get_partial_line(s: Line) -> String {
     match s {
         Line::PartialLine(s) => s,
-        _ => String::from("err"),
+        Line::FullLine(s) => panic!("Expected partial line but got full with {}", s),
     }
 }
 
