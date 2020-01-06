@@ -22,15 +22,28 @@ struct Line {
     line: Result<line_reader::Line, Error>,
 }
 
+impl Line {
+    fn print(&self) {
+        print!("{}", self);
+    }
+}
+
 impl fmt::Display for Line {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.line {
-            Err(err) => write!(f, "<{}> Error: {}", self.name, err),
+            Err(err) => writeln!(f, "<{}> Error: {}", self.name, err),
             Ok(line_reader::Line::PartialLine(s)) => {
-                write!(f, "[{}...] {}", self.name, s.trim_end())
+                writeln!(f, "[{}...] {}", self.name, s.trim_end())
             }
-            Ok(line_reader::Line::EOF(s)) => write!(f, "[{}<EOF>] {}", self.name, s.trim_end()),
-            Ok(line_reader::Line::FullLine(s)) => write!(f, "[{}] {}", self.name, s.trim_end()),
+            Ok(line_reader::Line::EOF(s)) => {
+                let s = s.trim_end();
+                if s.len() > 0 {
+                    writeln!(f, "[{}<EOF>] {}", self.name, s)
+                } else {
+                    write!(f, "")
+                }
+            }
+            Ok(line_reader::Line::FullLine(s)) => writeln!(f, "[{}] {}", self.name, s.trim_end()),
         }
     }
 }
@@ -259,7 +272,7 @@ fn main() {
             }
 
             Ok(Message::Line(line)) => {
-                println!("{}", line);
+                line.print();
             }
 
             Err(RecvTimeoutError::Disconnected) => {
@@ -294,7 +307,7 @@ fn main() {
     for msg in rx.try_iter() {
         match msg {
             Message::Line(line) => {
-                println!("{}", line);
+                line.print();
             }
             Message::ParentSignal(_) => {
                 // Ignore signals on exit

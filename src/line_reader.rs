@@ -34,6 +34,10 @@ impl Line {
             Line::EOF(s) => &s,
         }
     }
+
+    pub fn len(&self) -> usize {
+        self.as_line().trim_end().len()
+    }
 }
 
 // https://github.com/rust-lang/rust/blob/b69f6e65c081f9a628ef5db83ba77e3861e60e60/src/libstd/io/mod.rs#L333-L349
@@ -115,8 +119,8 @@ impl<R: Read> SafeLineReader<R> {
 
                 match memchr::memchr(b'\n', available) {
                     Some(i) => {
-                        let overflow = to_isize(self.max_line_size)
-                            - (to_isize(buf.len()) + to_isize(i));
+                        let overflow =
+                            to_isize(self.max_line_size) - (to_isize(buf.len()) + to_isize(i));
 
                         if overflow >= 0 {
                             let res = append_to_string(&mut buf, |b| {
@@ -389,5 +393,4 @@ fn long_line_in_the_middle() {
 
     let s = get_full_line(reader.read_line().unwrap());
     assert_eq!(s, "bar\n");
-
 }
