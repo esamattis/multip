@@ -215,7 +215,6 @@ fn can_split_too_long_lines_large_buffer() {
 
 #[test]
 fn can_split_too_long_lines_small_buffer() {
-    println!("hllo");
     let in_buf: &[u8] = b"too long line\nsecond line\n";
 
     let mut reader = SafeLineReader::new(BufReader::with_capacity(3, in_buf), 7);
