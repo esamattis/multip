@@ -54,6 +54,12 @@ pub enum Line {
     PartialLine(String),
 }
 
+enum Status {
+    Full(usize),
+    Partial(usize),
+    Missing(usize),
+}
+
 pub struct SafeLineReader<R> {
     inner: BufReader<R>,
     max_line_size: isize,
@@ -72,7 +78,7 @@ impl<R: Read> SafeLineReader<R> {
         let mut buf = String::new();
 
         loop {
-            let (done, used) = {
+            let status = {
                 let available = match self.inner.fill_buf() {
                     Ok(n) => n,
                     Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
@@ -92,7 +98,7 @@ impl<R: Read> SafeLineReader<R> {
                                 Ok(available[..=i].len())
                             })?;
 
-                            (true, i + 1)
+                            Status::Full(i + 1)
                         } else {
                             println!("################ ELSE {}", overflow);
 
@@ -101,7 +107,7 @@ impl<R: Read> SafeLineReader<R> {
                                 Ok(available[..space_available].len())
                             })?;
 
-                            (true, space_available)
+                            Status::Partial(space_available)
                         }
                     }
                     None => {
@@ -113,26 +119,39 @@ impl<R: Read> SafeLineReader<R> {
                                 b.extend_from_slice(&available[..space_available]);
                                 Ok(available[..space_available].len())
                             })?;
-                            (false, space_available)
+                            Status::Partial(space_available)
                         } else {
                             println!("overflow > 0 FALSE");
                             append_to_string(&mut buf, |b| {
                                 b.extend_from_slice(available);
                                 Ok(available.len())
                             })?;
-                            (false, available.len())
+                            Status::Missing(available.len())
                         }
                     }
                 }
             };
-            self.inner.consume(used);
 
-            if done || used == 0 {
-                return Ok(Line::FullLine(buf));
+            match status {
+                Status::Full(used) => {
+                    println!("full {}", used);
+                    self.inner.consume(used);
+                    return Ok(Line::FullLine(buf));
+                }
+                Status::Partial(used) => {
+                    println!("partial {}", used);
+                    self.inner.consume(used);
+                    return Ok(Line::PartialLine(buf));
+                }
+                Status::Missing(used) => {
+                    println!("missing {}", used);
+                    if used == 0 {
+                        return Ok(Line::FullLine(buf));
+                    }
+                    self.inner.consume(used);
+                }
             }
         }
-
-        // self.inner.read_line(&mut buf)?;
     }
 }
 
@@ -140,6 +159,14 @@ impl<R: Read> SafeLineReader<R> {
 fn get_full_line(s: Line) -> String {
     match s {
         Line::FullLine(s) => s,
+        _ => String::from("err"),
+    }
+}
+
+#[cfg(test)]
+fn get_partial_line(s: Line) -> String {
+    match s {
+        Line::PartialLine(s) => s,
         _ => String::from("err"),
     }
 }
@@ -176,28 +203,29 @@ fn can_split_too_long_lines_large_buffer() {
 
     let mut reader = SafeLineReader::new(BufReader::with_capacity(100, in_buf), 7);
 
-    let s = get_full_line(reader.read_line().unwrap());
+    let s = get_partial_line(reader.read_line().unwrap());
     assert_eq!(s, "too lon");
 
-    let s = get_full_line(reader.read_line().unwrap());
+    let s = get_partial_line(reader.read_line().unwrap());
     assert_eq!(s, "g line\n");
 
-    let s = get_full_line(reader.read_line().unwrap());
+    let s = get_partial_line(reader.read_line().unwrap());
     assert_eq!(s, "second ");
 }
 
 #[test]
 fn can_split_too_long_lines_small_buffer() {
+    println!("hllo");
     let in_buf: &[u8] = b"too long line\nsecond line\n";
 
     let mut reader = SafeLineReader::new(BufReader::with_capacity(3, in_buf), 7);
 
-    let s = get_full_line(reader.read_line().unwrap());
+    let s = get_partial_line(reader.read_line().unwrap());
     assert_eq!(s, "too lon");
 
-    let s = get_full_line(reader.read_line().unwrap());
+    let s = get_partial_line(reader.read_line().unwrap());
     assert_eq!(s, "g line\n");
 
-    let s = get_full_line(reader.read_line().unwrap());
+    let s = get_partial_line(reader.read_line().unwrap());
     assert_eq!(s, "second ");
 }
