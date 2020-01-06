@@ -80,6 +80,7 @@ enum Status {
     Full(usize),
     Partial(usize),
     Missing(usize),
+    Error(usize, Error),
 }
 
 pub struct SafeLineReader<R> {
@@ -116,38 +117,54 @@ impl<R: Read> SafeLineReader<R> {
                 match memchr::memchr(b'\n', available) {
                     Some(i) => {
                         if overflow >= 0 {
-                            append_to_string(&mut buf, |b| {
+                            let res = append_to_string(&mut buf, |b| {
                                 b.extend_from_slice(&available[..=i]);
                                 Ok(available[..=i].len())
-                            })?;
+                            });
 
-                            if self.sent_partial {
+                            if let Err(err) = res {
+                                Status::Error(i + 1, err)
+                            } else if self.sent_partial {
                                 Status::Partial(i + 1)
                             } else {
                                 Status::Full(i + 1)
                             }
                         } else {
-                            append_to_string(&mut buf, |b| {
+                            let res = append_to_string(&mut buf, |b| {
                                 b.extend_from_slice(&available[..space_available]);
                                 Ok(available[..space_available].len())
-                            })?;
+                            });
 
-                            Status::Partial(space_available)
+                            if let Err(err) = res {
+                                Status::Error(i + 1, err)
+                            } else {
+                                Status::Partial(space_available)
+                            }
                         }
                     }
                     None => {
                         if overflow < 0 {
-                            append_to_string(&mut buf, |b| {
+                            let res = append_to_string(&mut buf, |b| {
                                 b.extend_from_slice(&available[..space_available]);
                                 Ok(available[..space_available].len())
-                            })?;
-                            Status::Partial(space_available)
+                            });
+
+                            if let Err(err) = res {
+                                Status::Error(space_available, err)
+                            } else {
+                                Status::Partial(space_available)
+                            }
                         } else {
-                            append_to_string(&mut buf, |b| {
+                            let res = append_to_string(&mut buf, |b| {
                                 b.extend_from_slice(available);
                                 Ok(available.len())
-                            })?;
-                            Status::Missing(available.len())
+                            });
+
+                            if let Err(err) = res {
+                                Status::Error(available.len(), err)
+                            } else {
+                                Status::Missing(available.len())
+                            }
                         }
                     }
                 }
@@ -170,6 +187,10 @@ impl<R: Read> SafeLineReader<R> {
                         return Ok(Line::EOF(buf));
                     }
                     self.inner.consume(used);
+                }
+                Status::Error(used, err) => {
+                    self.inner.consume(used);
+                    return Err(err);
                 }
             }
         }
@@ -320,5 +341,5 @@ fn test_eof() {
     assert_eq!(format!("{}", line), "PartialLine(12345)");
 
     let line = reader.read_line().unwrap();
-    assert_eq!(format!("{}", line), "EOF(678");
+    assert_eq!(format!("{}", line), "EOF(678)");
 }
