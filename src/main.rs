@@ -39,7 +39,7 @@ fn read_env_as_number<N>(env: &str, default: N) -> N
 where
     N: std::str::FromStr,
 {
-    return env::var("MULTIP_MAX_LINE_LENGTH")
+    return env::var(env)
         .unwrap_or(String::from("50"))
         .parse::<N>()
         .unwrap_or(default);
