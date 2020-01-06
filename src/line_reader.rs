@@ -1,4 +1,5 @@
 use core::str::from_utf8;
+use std::cmp;
 use std::convert::TryFrom;
 use std::fmt;
 use std::io::{BufRead, BufReader, Read};
@@ -130,15 +131,16 @@ impl<R: Read> SafeLineReader<R> {
                                 Status::Full(i + 1)
                             }
                         } else {
+                            let remaining = cmp::min(space_available, i + 1);
                             let res = append_to_string(&mut buf, |b| {
-                                b.extend_from_slice(&available[..space_available]);
-                                Ok(available[..space_available].len())
+                                b.extend_from_slice(&available[..remaining]);
+                                Ok(available[..remaining].len())
                             });
 
                             if let Err(err) = res {
                                 Status::Error(i + 1, err)
                             } else {
-                                Status::Partial(space_available)
+                                Status::Partial(remaining)
                             }
                         }
                     }
@@ -342,4 +344,28 @@ fn test_eof() {
 
     let line = reader.read_line().unwrap();
     assert_eq!(format!("{}", line), "EOF(678)");
+}
+
+#[test]
+fn long_line_with_large_buffer() {
+    let in_buf: &[u8] = b"abcdefghikjlmnopqrstxyz\nabcdefghikjlmnopqrstxyz\n";
+    let mut reader = SafeLineReader::new(BufReader::with_capacity(1000, in_buf), 5);
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "abcde");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "fghik");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "jlmno");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "pqrst");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "xyz\n");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "abcde");
 }
