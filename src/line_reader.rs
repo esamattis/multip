@@ -111,12 +111,13 @@ impl<R: Read> SafeLineReader<R> {
                     Err(e) => return Err(e),
                 };
 
-                let overflow = to_isize(self.max_line_size)
-                    - (to_isize(buf.len()) + to_isize(available.len()));
                 let space_available = to_usize(to_isize(self.max_line_size) - to_isize(buf.len()));
 
                 match memchr::memchr(b'\n', available) {
                     Some(i) => {
+                        let overflow = to_isize(self.max_line_size)
+                            - (to_isize(buf.len()) + to_isize(i));
+
                         if overflow >= 0 {
                             let res = append_to_string(&mut buf, |b| {
                                 b.extend_from_slice(&available[..=i]);
@@ -145,6 +146,8 @@ impl<R: Read> SafeLineReader<R> {
                         }
                     }
                     None => {
+                        let overflow = to_isize(self.max_line_size)
+                            - (to_isize(buf.len()) + to_isize(available.len()));
                         if overflow < 0 {
                             let res = append_to_string(&mut buf, |b| {
                                 b.extend_from_slice(&available[..space_available]);
