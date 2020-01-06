@@ -1,5 +1,6 @@
 use core::str::from_utf8;
 use std::convert::TryFrom;
+use std::fmt;
 use std::io::{BufRead, BufReader, Read};
 use std::io::{Error, ErrorKind};
 
@@ -52,6 +53,17 @@ where
 pub enum Line {
     FullLine(String),
     PartialLine(String),
+    EOF(String),
+}
+
+impl fmt::Display for Line {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Line::PartialLine(s) => write!(f, "PartialLine({})", s),
+            Line::FullLine(s) => write!(f, "FullLine({})", s),
+            Line::EOF(s) => write!(f, "EOF({})", s),
+        }
+    }
 }
 
 enum Status {
@@ -155,7 +167,7 @@ impl<R: Read> SafeLineReader<R> {
                     println!("missing {}", used);
                     if used == 0 {
                         self.sent_partial = false;
-                        return Ok(Line::FullLine(buf));
+                        return Ok(Line::EOF(buf));
                     }
                     self.inner.consume(used);
                 }
@@ -169,6 +181,7 @@ fn get_full_line(s: Line) -> String {
     match s {
         Line::FullLine(s) => s,
         Line::PartialLine(s) => panic!("Expected full line but got partial with: `{}`", s),
+        Line::EOF(s) => panic!("Expected full line but got EOF with: `{}`", s),
     }
 }
 
@@ -177,6 +190,7 @@ fn get_partial_line(s: Line) -> String {
     match s {
         Line::PartialLine(s) => s,
         Line::FullLine(s) => panic!("Expected partial line but got full with: `{}`", s),
+        Line::EOF(s) => panic!("Expected partial line but got EOF with: `{}`", s),
     }
 }
 
@@ -295,4 +309,16 @@ fn invalid_unicode() {
     };
 
     assert_eq!(err, "stream did not contain valid UTF-8");
+}
+
+#[test]
+fn test_eof() {
+    let in_buf: &[u8] = b"12345678";
+    let mut reader = SafeLineReader::new(BufReader::with_capacity(2, in_buf), 5);
+
+    let line = reader.read_line().unwrap();
+    assert_eq!(format!("{}", line), "PartialLine(12345)");
+
+    let line = reader.read_line().unwrap();
+    assert_eq!(format!("{}", line), "EOF(678)");
 }
