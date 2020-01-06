@@ -25,6 +25,16 @@ fn to_isize(i: usize) -> isize {
     isize::try_from(i).unwrap_or(0)
 }
 
+impl Line {
+    pub fn as_line<'a>(&'a self) -> &'a str {
+        match self {
+            Line::PartialLine(s) => &s,
+            Line::FullLine(s) => &s,
+            Line::EOF(s) => &s,
+        }
+    }
+}
+
 // https://github.com/rust-lang/rust/blob/b69f6e65c081f9a628ef5db83ba77e3861e60e60/src/libstd/io/mod.rs#L333-L349
 fn append_to_string<F>(buf: &mut String, f: F) -> Result<usize, Error>
 where
@@ -87,7 +97,7 @@ impl<R: Read> SafeLineReader<R> {
         }
     }
 
-    fn read_line(&mut self) -> Result<Line, Error> {
+    pub fn read_line(&mut self) -> Result<Line, Error> {
         // b'\n'
         let mut buf = String::new();
 
@@ -106,7 +116,6 @@ impl<R: Read> SafeLineReader<R> {
                 match memchr::memchr(b'\n', available) {
                     Some(i) => {
                         if overflow >= 0 {
-                            println!("################ IF {}", overflow);
                             append_to_string(&mut buf, |b| {
                                 b.extend_from_slice(&available[..=i]);
                                 Ok(available[..=i].len())
@@ -118,8 +127,6 @@ impl<R: Read> SafeLineReader<R> {
                                 Status::Full(i + 1)
                             }
                         } else {
-                            println!("################ ELSE {}", overflow);
-
                             append_to_string(&mut buf, |b| {
                                 b.extend_from_slice(&available[..space_available]);
                                 Ok(available[..space_available].len())
@@ -129,17 +136,13 @@ impl<R: Read> SafeLineReader<R> {
                         }
                     }
                     None => {
-                        println!("################ None {}", overflow);
-
                         if overflow < 0 {
-                            println!("overflow > 0 TRUE");
                             append_to_string(&mut buf, |b| {
                                 b.extend_from_slice(&available[..space_available]);
                                 Ok(available[..space_available].len())
                             })?;
                             Status::Partial(space_available)
                         } else {
-                            println!("overflow > 0 FALSE");
                             append_to_string(&mut buf, |b| {
                                 b.extend_from_slice(available);
                                 Ok(available.len())
@@ -152,19 +155,16 @@ impl<R: Read> SafeLineReader<R> {
 
             match status {
                 Status::Full(used) => {
-                    println!("full {}", used);
                     self.inner.consume(used);
                     self.sent_partial = false;
                     return Ok(Line::FullLine(buf));
                 }
                 Status::Partial(used) => {
-                    println!("partial {}", used);
                     self.inner.consume(used);
                     self.sent_partial = true;
                     return Ok(Line::PartialLine(buf));
                 }
                 Status::Missing(used) => {
-                    println!("missing {}", used);
                     if used == 0 {
                         self.sent_partial = false;
                         return Ok(Line::EOF(buf));
@@ -320,5 +320,5 @@ fn test_eof() {
     assert_eq!(format!("{}", line), "PartialLine(12345)");
 
     let line = reader.read_line().unwrap();
-    assert_eq!(format!("{}", line), "EOF(678)");
+    assert_eq!(format!("{}", line), "EOF(678");
 }

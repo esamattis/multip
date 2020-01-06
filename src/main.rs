@@ -4,8 +4,8 @@ use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use std::env;
 use std::fmt;
+use std::io::BufReader;
 use std::io::Read;
-use std::io::{BufRead, BufReader};
 use std::marker::Send;
 use std::process::{id, Command, Stdio};
 use std::sync::mpsc;
@@ -20,12 +20,13 @@ mod waitpid;
 
 struct Line {
     name: String,
-    line: String,
+    line: line_reader::Line,
 }
 
 impl fmt::Display for Line {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{}] {}", self.name, self.line.trim())
+        let line = self.line.as_line();
+        write!(f, "[{}] {}", self.name, line.trim())
     }
 }
 
@@ -112,24 +113,32 @@ impl MultipChild<'_> {
         let name = self.name.to_string();
         let tx = mpsc::Sender::clone(self.tx);
         thread::spawn(move || {
-            let mut buf = BufReader::new(stream);
+            let buf = BufReader::new(stream);
+            let mut reader = line_reader::SafeLineReader::new(buf, 52);
 
             loop {
                 let name = name.to_string();
-                let mut line = String::new();
-                let res = buf.read_line(&mut line);
+                let res = reader.read_line();
+
                 match res {
-                    Ok(0) => {
-                        // EOF
+                    Ok(line_reader::Line::EOF(s)) => {
+                        tx.send(Message::Line(Line {
+                            name,
+                            line: line_reader::Line::EOF(s),
+                        }))
+                        .unwrap();
                         return;
                     }
-                    Ok(_) => {
+                    Ok(line) => {
                         tx.send(Message::Line(Line { name, line })).unwrap();
                     }
                     Err(msg) => {
                         tx.send(Message::Line(Line {
                             name,
-                            line: format!("Failed to parse line. Error {}", msg),
+                            line: line_reader::Line::FullLine(format!(
+                                "Failed to parse line. Error {}",
+                                msg
+                            )),
                         }))
                         .unwrap();
                     }
