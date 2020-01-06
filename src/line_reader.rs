@@ -265,3 +265,21 @@ fn really_long_line() {
     let s = get_partial_line(reader.read_line().unwrap());
     assert_eq!(s, "a\n");
 }
+
+#[test]
+fn empty_lines() {
+    let in_buf: &[u8] = b"\n\n\n\n";
+    let mut reader = SafeLineReader::new(BufReader::with_capacity(2, in_buf), 5);
+
+    let s = get_full_line(reader.read_line().unwrap());
+    assert_eq!(s, "\n");
+
+    let s = get_full_line(reader.read_line().unwrap());
+    assert_eq!(s, "\n");
+
+    let s = get_full_line(reader.read_line().unwrap());
+    assert_eq!(s, "\n");
+
+    let s = get_full_line(reader.read_line().unwrap());
+    assert_eq!(s, "\n");
+}
