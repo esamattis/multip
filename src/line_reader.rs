@@ -63,6 +63,7 @@ enum Status {
 pub struct SafeLineReader<R> {
     inner: BufReader<R>,
     max_line_size: isize,
+    sent_partial: bool,
 }
 
 impl<R: Read> SafeLineReader<R> {
@@ -70,6 +71,7 @@ impl<R: Read> SafeLineReader<R> {
         SafeLineReader {
             inner,
             max_line_size,
+            sent_partial: false,
         }
     }
 
@@ -98,7 +100,11 @@ impl<R: Read> SafeLineReader<R> {
                                 Ok(available[..=i].len())
                             })?;
 
-                            Status::Full(i + 1)
+                            if self.sent_partial {
+                                Status::Partial(i + 1)
+                            } else {
+                                Status::Full(i + 1)
+                            }
                         } else {
                             println!("################ ELSE {}", overflow);
 
@@ -136,16 +142,19 @@ impl<R: Read> SafeLineReader<R> {
                 Status::Full(used) => {
                     println!("full {}", used);
                     self.inner.consume(used);
+                    self.sent_partial = false;
                     return Ok(Line::FullLine(buf));
                 }
                 Status::Partial(used) => {
                     println!("partial {}", used);
                     self.inner.consume(used);
+                    self.sent_partial = true;
                     return Ok(Line::PartialLine(buf));
                 }
                 Status::Missing(used) => {
                     println!("missing {}", used);
                     if used == 0 {
+                        self.sent_partial = false;
                         return Ok(Line::FullLine(buf));
                     }
                     self.inner.consume(used);
@@ -159,7 +168,7 @@ impl<R: Read> SafeLineReader<R> {
 fn get_full_line(s: Line) -> String {
     match s {
         Line::FullLine(s) => s,
-        Line::PartialLine(s) => panic!("Expected full line but got partial with {}", s),
+        Line::PartialLine(s) => panic!("Expected full line but got partial with: `{}`", s),
     }
 }
 
@@ -167,7 +176,7 @@ fn get_full_line(s: Line) -> String {
 fn get_partial_line(s: Line) -> String {
     match s {
         Line::PartialLine(s) => s,
-        Line::FullLine(s) => panic!("Expected partial line but got full with {}", s),
+        Line::FullLine(s) => panic!("Expected partial line but got full with: `{}`", s),
     }
 }
 
@@ -239,5 +248,20 @@ fn really_long_line() {
     assert_eq!(s, "too l");
 
     let s = get_partial_line(reader.read_line().unwrap());
-    assert_eq!(s, "");
+    assert_eq!(s, "ong l");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "ine h");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "ubba ");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "bubba");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, " dubb");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "a\n");
 }
