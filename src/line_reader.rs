@@ -283,3 +283,16 @@ fn empty_lines() {
     let s = get_full_line(reader.read_line().unwrap());
     assert_eq!(s, "\n");
 }
+
+#[test]
+fn invalid_unicode() {
+    let in_buf: &[u8] = &[32, 255, 6, 2, 3];
+    let mut reader = SafeLineReader::new(BufReader::with_capacity(2, in_buf), 5);
+
+    let err = match reader.read_line() {
+        Err(err) => format!("{}", err),
+        _ => String::from("no error"),
+    };
+
+    assert_eq!(err, "stream did not contain valid UTF-8");
+}
