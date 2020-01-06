@@ -4,8 +4,7 @@ use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use std::env;
 use std::fmt;
-use std::io::Read;
-use std::io::{BufRead, BufReader};
+use std::io::{BufReader, Error, Read};
 use std::marker::Send;
 use std::process::{id, Command, Stdio};
 use std::sync::mpsc;
@@ -13,18 +12,26 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::thread;
 use std::time::Duration;
 
+mod line_reader;
 mod log;
 mod signal_closure;
 mod waitpid;
 
 struct Line {
     name: String,
-    line: String,
+    line: Result<line_reader::Line, Error>,
 }
 
 impl fmt::Display for Line {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{}] {}", self.name, self.line.trim())
+        match &self.line {
+            Err(err) => write!(f, "<{}> Error: {}", self.name, err),
+            Ok(line_reader::Line::PartialLine(s)) => {
+                write!(f, "[{}<Partial>] {}", self.name, s.trim())
+            }
+            Ok(line_reader::Line::EOF(s)) => write!(f, "[{}<EOF>] {}", self.name, s.trim()),
+            Ok(line_reader::Line::FullLine(s)) => write!(f, "[{}] {}", self.name, s.trim()),
+        }
     }
 }
 
@@ -111,27 +118,22 @@ impl MultipChild<'_> {
         let name = self.name.to_string();
         let tx = mpsc::Sender::clone(self.tx);
         thread::spawn(move || {
-            let mut buf = BufReader::new(stream);
+            let buf = BufReader::new(stream);
+            let mut reader = line_reader::SafeLineReader::new(buf, 52);
 
             loop {
                 let name = name.to_string();
-                let mut line = String::new();
-                let res = buf.read_line(&mut line);
-                match res {
-                    Ok(0) => {
-                        // EOF
-                        return;
-                    }
-                    Ok(_) => {
-                        tx.send(Message::Line(Line { name, line })).unwrap();
-                    }
-                    Err(msg) => {
-                        tx.send(Message::Line(Line {
-                            name,
-                            line: format!("Failed to parse line. Error {}", msg),
-                        }))
-                        .unwrap();
-                    }
+                let line = reader.read_line();
+
+                let exit = match line {
+                    Ok(line_reader::Line::EOF(_)) => true,
+                    _ => false,
+                };
+
+                tx.send(Message::Line(Line { name, line })).unwrap();
+
+                if exit {
+                    return;
                 }
             }
         })
