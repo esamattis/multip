@@ -228,3 +228,16 @@ fn can_split_too_long_lines_small_buffer() {
     let s = get_partial_line(reader.read_line().unwrap());
     assert_eq!(s, "second ");
 }
+
+#[test]
+fn really_long_line() {
+    let in_buf: &[u8] = b"too long line hubba bubba dubba\n";
+
+    let mut reader = SafeLineReader::new(BufReader::with_capacity(3, in_buf), 5);
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "too l");
+
+    let s = get_partial_line(reader.read_line().unwrap());
+    assert_eq!(s, "");
+}
