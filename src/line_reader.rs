@@ -79,12 +79,14 @@ impl<R: Read> SafeLineReader<R> {
                     Err(e) => return Err(e),
                 };
 
-                let overflow = self.max_line_size - to_isize(buf.len()) - to_isize(available.len());
+                let overflow =
+                    self.max_line_size - (to_isize(buf.len()) + to_isize(available.len()));
+                let space_available = to_usize(self.max_line_size - to_isize(buf.len()));
 
                 match memchr::memchr(b'\n', available) {
                     Some(i) => {
                         if overflow >= 0 {
-                            println!("eka {}", overflow);
+                            println!("################ IF {}", overflow);
                             append_to_string(&mut buf, |b| {
                                 b.extend_from_slice(&available[..=i]);
                                 Ok(available[..=i].len())
@@ -92,37 +94,34 @@ impl<R: Read> SafeLineReader<R> {
 
                             (true, i + 1)
                         } else {
-                            let space_available = self.max_line_size - to_isize(buf.len());
-                            let boo = to_usize(space_available);
+                            println!("################ ELSE {}", overflow);
 
-                            println!("toka {}", boo);
                             append_to_string(&mut buf, |b| {
-                                b.extend_from_slice(&available[..boo]);
-                                Ok(available[..boo].len())
+                                b.extend_from_slice(&available[..space_available]);
+                                Ok(available[..space_available].len())
                             })?;
 
-                            (true, boo)
+                            (true, space_available)
                         }
                     }
                     None => {
-                        // let overflow = (self.max_line_size as isize)
-                        //     - (buf.len() as isize)
-                        //     - (available.len() as isize);
-                        // let overflow = -overflow;
+                        println!("################ None {}", overflow);
 
-                        // if overflow > 0 {
-                        //     append_to_string(&mut buf, |b| {
-                        //         b.extend_from_slice(&available[..=i]);
-                        //         Ok(available[..=i].len())
-                        //     })?;
-                        // }
-
-                        append_to_string(&mut buf, |b| {
-                            b.extend_from_slice(available);
-                            Ok(available.len())
-                        })?;
-
-                        (false, available.len())
+                        if overflow < 0 {
+                            println!("overflow > 0 TRUE");
+                            append_to_string(&mut buf, |b| {
+                                b.extend_from_slice(&available[..space_available]);
+                                Ok(available[..space_available].len())
+                            })?;
+                            (false, space_available)
+                        } else {
+                            println!("overflow > 0 FALSE");
+                            append_to_string(&mut buf, |b| {
+                                b.extend_from_slice(available);
+                                Ok(available.len())
+                            })?;
+                            (false, available.len())
+                        }
                     }
                 }
             };
@@ -172,11 +171,33 @@ fn can_read_multiple_lines_with_words() {
 }
 
 #[test]
-fn can_split_too_long_lines() {
-    let in_buf: &[u8] = b"too long line\nsecond line";
+fn can_split_too_long_lines_large_buffer() {
+    let in_buf: &[u8] = b"too long line\nsecond line\n";
 
-    let mut reader = SafeLineReader::new(BufReader::with_capacity(100, in_buf), 5);
+    let mut reader = SafeLineReader::new(BufReader::with_capacity(100, in_buf), 7);
 
     let s = get_full_line(reader.read_line().unwrap());
-    assert_eq!(s, "too l");
+    assert_eq!(s, "too lon");
+
+    let s = get_full_line(reader.read_line().unwrap());
+    assert_eq!(s, "g line\n");
+
+    let s = get_full_line(reader.read_line().unwrap());
+    assert_eq!(s, "second ");
+}
+
+#[test]
+fn can_split_too_long_lines_small_buffer() {
+    let in_buf: &[u8] = b"too long line\nsecond line\n";
+
+    let mut reader = SafeLineReader::new(BufReader::with_capacity(3, in_buf), 7);
+
+    let s = get_full_line(reader.read_line().unwrap());
+    assert_eq!(s, "too lon");
+
+    let s = get_full_line(reader.read_line().unwrap());
+    assert_eq!(s, "g line\n");
+
+    let s = get_full_line(reader.read_line().unwrap());
+    assert_eq!(s, "second ");
 }
