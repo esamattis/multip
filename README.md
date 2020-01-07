@@ -3,16 +3,13 @@
 Tiny multi process manager for containers written in Rust. For example if you
 want to run nginx and php-fpm in a single container.
 
-This is not a init replacement. If you need zombie process reaping pass
-`--init` to Docker and it will inject [tini][] for that.
+Kinda like [tini][] but for multiple processes. This is also somewhat similar
+to [concurrently], [s6][], [GNU Parallel][parallel] or some of it's
+[alternatives][] but intentionally much less featured. Also no runtime is
+required as it is just a single binary in contrast to concurrently requiring
+node.js and GNU Parallel Perl.
 
 [tini]: https://github.com/krallin/tini
-
-This is somewhat similar to [concurrently], [s6][], [GNU Parallel][parallel]
-or some of it's [alternatives][] but intentionally much less featured. Also
-no runtime is required as it is just a single binary in contrast to
-concurrently requiring node.js and GNU Parallel Perl.
-
 [concurrently]: https://www.npmjs.com/package/concurrently
 [s6]: http://skarnet.org/software/s6/
 [parallel]: https://www.gnu.org/software/parallel/
