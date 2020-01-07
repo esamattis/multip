@@ -1,9 +1,9 @@
 # multip
 
-Tiny multi process manager for containers written in Rust. For example if you
+Tiny multi process init for containers written in Rust. For example if you
 want to run nginx and php-fpm in a single container.
 
-Kinda like [tini][] but for multiple processes. This is also somewhat similar
+Like [tini][] but for multiple processes. This is also somewhat similar
 to [concurrently], [s6][], [GNU Parallel][parallel] or some of it's
 [alternatives][] but intentionally much less featured. Also no runtime is
 required as it is just a single binary in contrast to concurrently requiring
