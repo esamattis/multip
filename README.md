@@ -1,6 +1,6 @@
 # multip
 
-Tiny multi process init for containers written in Rust. For example if you
+Tiny multi process `init` for containers written in Rust. For example if you
 want to run nginx and php-fpm in a single container.
 
 Like [tini][] but for multiple processes. This is also somewhat similar
