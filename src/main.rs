@@ -50,10 +50,10 @@ impl fmt::Display for Line {
 
 fn read_env_as_number<N>(env: &str, default: N) -> N
 where
-    N: std::str::FromStr,
+    N: std::str::FromStr + std::string::ToString,
 {
     return env::var(env)
-        .unwrap_or(String::from("50"))
+        .unwrap_or(default.to_string())
         .parse::<N>()
         .unwrap_or(default);
 }
