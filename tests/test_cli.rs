@@ -1,5 +1,6 @@
+use regex::Regex;
 use std::io::{BufRead, BufReader};
-use std::process::{id, ChildStdout, Command, Stdio};
+use std::process::{ChildStdout, Command, Stdio};
 
 fn run_multip(args: Vec<&str>) -> Command {
     let mut cmd = Command::new("target/debug/multip");
@@ -34,6 +35,31 @@ fn assert_has_line(lines: &Vec<String>, needle_line: &str) {
     }
 
     panic!("Failed to find line: {}", needle_line);
+}
+
+fn assert_line_matches(lines: &Vec<String>, pat: &str, count: i32) {
+    let re = Regex::new(pat).unwrap();
+
+    let mut match_count = 0;
+
+    for line in lines {
+        if re.is_match(line.trim()) {
+            match_count = match_count + 1;
+        }
+    }
+
+    if match_count == count {
+        return;
+    }
+
+    for line in lines {
+        eprintln!("LINE> {}", line);
+    }
+
+    panic!(
+        "Failed to get {} (got {}) matches with RegExp: {}",
+        count, match_count, pat
+    );
 }
 
 #[test]
@@ -88,4 +114,18 @@ fn uses_exit_code_of_first_dead_child_with_zore() {
 
     let status_code = cmd.wait().unwrap().code().unwrap();
     assert_eq!(status_code, 0);
+}
+
+#[test]
+fn reaps_zombies() {
+    let mut cmd = run_multip(vec![
+        "foo: sh -c 'sleep 0.1 & exec sleep 0.2'",
+        "bar: sh -c 'sleep 0.3'",
+    ])
+    .spawn()
+    .unwrap();
+
+    let lines = get_lines(cmd.stdout.take());
+
+    assert_line_matches(&lines, r"Reaped zombie process(.*) with exit code 0", 1);
 }

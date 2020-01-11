@@ -1,3 +1,4 @@
+use libc::{prctl, PR_SET_CHILD_SUBREAPER};
 use nix::sys::signal;
 use nix::sys::signal::kill;
 use nix::sys::signal::Signal;
@@ -184,6 +185,10 @@ fn command_with_name(s: &String) -> (&str, &str) {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+
+    unsafe {
+        prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
+    }
 
     for command in args[1..].iter() {
         if command == "--version" {
