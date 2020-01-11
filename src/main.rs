@@ -226,6 +226,7 @@ fn main() {
         let mut forward: Option<Signal> = None;
 
         // Look for dead chilren on every event
+        // AKA reap zombies
         for (pid, exit_code) in waitpid::iter_dead_children() {
             let child = children.iter_mut().find(|child| child.pid() == pid);
 
@@ -239,7 +240,11 @@ fn main() {
                     }
                 }
                 None => {
-                    log!("Unknown process({}) died with exit code {}", pid, exit_code);
+                    log!(
+                        "Reaped zombie process({}) with exit code {}",
+                        pid,
+                        exit_code
+                    );
                 }
             }
         }
