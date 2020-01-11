@@ -216,8 +216,8 @@ fn main() {
     }
 
     let mut killall: Option<Signal> = None;
-
     let mut sigint_count = 0;
+    let mut multip_exit_code: Option<i32> = None;
 
     loop {
         // Manually check for dead children with the given timeout
@@ -237,6 +237,10 @@ fn main() {
                     if killall.is_none() {
                         log!("Killing all other children too");
                         killall = Some(Signal::SIGTERM);
+                    }
+
+                    if multip_exit_code.is_none() {
+                        multip_exit_code = Some(exit_code);
                     }
                 }
                 None => {
@@ -319,4 +323,6 @@ fn main() {
             }
         }
     }
+
+    std::process::exit(multip_exit_code.unwrap_or(0));
 }
