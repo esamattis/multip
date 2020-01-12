@@ -129,3 +129,17 @@ fn reaps_zombies() {
 
     assert_line_matches(&lines, r"Reaped zombie process(.*) with exit code 0", 1);
 }
+
+#[test]
+fn wraps_long_lines() {
+    let mut cmd = run_multip(vec!["foo: sh -c 'echo 1234567890'"])
+        .env("MULTIP_MAX_LINE_LENGTH", "5")
+        .spawn()
+        .unwrap();
+
+    let lines = get_lines(cmd.stdout.take());
+    cmd.wait().unwrap();
+
+    assert_has_line(&lines, "[foo...] 12345");
+    assert_has_line(&lines, "[foo...] 67890");
+}
