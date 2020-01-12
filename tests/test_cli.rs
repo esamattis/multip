@@ -118,16 +118,13 @@ fn uses_exit_code_of_first_dead_child_with_zore() {
 
 #[test]
 fn reaps_zombies() {
-    let mut cmd = run_multip(vec![
-        "foo: sh -c 'sleep 0.01 & exec sleep 0.02'",
-        "bar: sh -c 'sleep 0.1'",
-    ])
-    .spawn()
-    .unwrap();
+    let mut cmd = run_multip(vec!["test: ./tests/zombie_creator.py"])
+        .spawn()
+        .unwrap();
 
     let lines = get_lines(cmd.stdout.take());
 
-    assert_line_matches(&lines, r"Reaped zombie process(.*) with exit code 0", 1);
+    assert_line_matches(&lines, r"Reaped zombie process(.*) with exit code 12", 1);
 }
 
 #[test]
