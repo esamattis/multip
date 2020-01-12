@@ -12,8 +12,8 @@ this as a combination of `tini` (the default `init` in Docker) and
 
 ## Features
 
--   If one the started processes dies it will bring all others down too so your
-    container orchestration can handle the error (report, restart, whatever)
+-   If one the started processes exits it will bring all others down too so
+    your container orchestration can handle the error (report, restart, whatever)
 -   Reap zombies
 -   Prefix process stdout&stderr with labels so you can know which process sent
     which message
@@ -94,6 +94,26 @@ done
 
 Note that here we cannot use `exec` because we need to keep the script alive
 for restarts.
+
+### Keep running on success
+
+`multip` brings all processes down even when child exits with success status
+code (zero). You can keep others running with `sleep infinity`.
+
+```sh
+#!/bin/sh
+
+set -eu
+
+ret=0
+node /app/server.js || ret=$?
+
+if [ "$ret" = "0" ]; then
+    exec sleep infinity
+fi
+
+exit $ret
+```
 
 # Similar tools
 
