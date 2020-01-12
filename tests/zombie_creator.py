@@ -20,13 +20,15 @@ if worker_pid != 0:
     sys.exit(11)
 
 
+log("Started worker {}".format(os.getpid()))
 child_pid = os.fork()
 
 if child_pid == 0:
     # Sleep longer than the parent so this becomes a zombie when exiting as
     # it has no parent that can wait on it
-    log("Child started")
+    log("Child {} started with parent {}".format( os.getpid(), os.getppid()))
     time.sleep(0.2)
+    log("Orpan parent is now {}".format(os.getppid()))
     log("Orphan exiting and becoming zombie")
     sys.exit(12)
 else:
