@@ -227,7 +227,7 @@ fn main() {
     loop {
         // Manually check for dead children with the given timeout
         let msg = rx.recv_timeout(Duration::from_millis(100));
-
+        let somebody_is_alive = children.iter().any(|child| child.is_alive());
         let mut forward: Option<Signal> = None;
 
         // Look for dead chilren on every event
@@ -295,8 +295,6 @@ fn main() {
             }
         }
 
-        let mut somebody_is_alive = false;
-
         for child in children.iter_mut() {
             if let Some(sig) = forward {
                 child.kill(sig);
@@ -304,10 +302,6 @@ fn main() {
 
             if let Some(sig) = killall {
                 child.kill(sig);
-            }
-
-            if child.is_alive() {
-                somebody_is_alive = true;
             }
         }
 
