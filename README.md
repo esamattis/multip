@@ -5,8 +5,10 @@ want to run nginx and php-fpm in a single container.
 
 This is very similiar to [concurrently][] but also acts as a valid `init` by
 implementing zombie process reaping and signal forwarding. You could think
-this as a combination of [tini][] (the default `init` in Docker) and
+this as a combination of `tini` (the default `init` in Docker) and
 `concurrently`.
+
+-   [concurrently]: https://www.npmjs.com/package/concurrently
 
 ## Features
 
