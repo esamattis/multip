@@ -226,7 +226,7 @@ fn become_subreaper() -> Result<(), String> {
 fn become_subreaper() -> Result<(), String> {
     // pid 1 does not need become subreaper because it is _the_ reaper
     if id() == 1 {
-        return Ok();
+        return Ok(());
     }
 
     let ret = unsafe { prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) };
