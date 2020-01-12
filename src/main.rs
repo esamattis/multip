@@ -10,6 +10,7 @@ use std::marker::Send;
 use std::process::{id, Command, Stdio};
 use std::sync::mpsc;
 use std::sync::mpsc::RecvTimeoutError;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -72,6 +73,8 @@ struct MultipChild<'a> {
     is_dead: bool,
     tx: &'a Channel,
     cmd: std::process::Child,
+    stdout_eof: Arc<Mutex<bool>>,
+    stderr_eof: Arc<Mutex<bool>>,
 }
 
 impl fmt::Display for MultipChild<'_> {
@@ -104,12 +107,49 @@ impl MultipChild<'_> {
             cmd,
             is_dead: false,
             kill_sent: None,
+            stdout_eof: Arc::new(Mutex::new(false)),
+            stderr_eof: Arc::new(Mutex::new(false)),
         };
 
-        child.monitor_ouput(stdout);
-        child.monitor_ouput(stderr);
+        child.monitor_ouput(Arc::clone(&child.stdout_eof), stdout);
+        child.monitor_ouput(Arc::clone(&child.stderr_eof), stderr);
 
         child
+    }
+
+    fn monitor_ouput(
+        &self,
+        eof_mutex: Arc<Mutex<bool>>,
+        stream: impl Read + Send + 'static,
+    ) -> std::thread::JoinHandle<()> {
+        let name = self.name.to_string();
+        let tx = mpsc::Sender::clone(self.tx);
+        thread::spawn(move || {
+            let buf = BufReader::new(stream);
+
+            let line_length = read_env_as_number("MULTIP_MAX_LINE_LENGTH", 1000);
+
+            let mut reader = line_reader::SafeLineReader::new(buf, line_length);
+
+            loop {
+                let name = name.to_string();
+                let line = reader.read_line();
+
+                let exit = match line {
+                    Ok(line_reader::Line::EOF(_)) => true,
+                    _ => false,
+                };
+
+                tx.send(Message::Line(Line { name, line })).unwrap();
+
+                if exit {
+                    break;
+                }
+            }
+
+            let mut eof = eof_mutex.lock().unwrap();
+            *eof = true;
+        })
     }
 
     fn pid(&self) -> Pid {
@@ -138,36 +178,24 @@ impl MultipChild<'_> {
         }
     }
 
-    fn monitor_ouput(&self, stream: impl Read + Send + 'static) -> std::thread::JoinHandle<()> {
-        let name = self.name.to_string();
-        let tx = mpsc::Sender::clone(self.tx);
-        thread::spawn(move || {
-            let buf = BufReader::new(stream);
-
-            let line_length = read_env_as_number("MULTIP_MAX_LINE_LENGTH", 1000);
-
-            let mut reader = line_reader::SafeLineReader::new(buf, line_length);
-
-            loop {
-                let name = name.to_string();
-                let line = reader.read_line();
-
-                let exit = match line {
-                    Ok(line_reader::Line::EOF(_)) => true,
-                    _ => false,
-                };
-
-                tx.send(Message::Line(Line { name, line })).unwrap();
-
-                if exit {
-                    return;
-                }
-            }
-        })
-    }
-
     fn is_alive(&self) -> bool {
-        !self.is_dead
+        if !self.is_dead {
+            return true;
+        }
+
+        let stdout_eof = self.stdout_eof.lock().unwrap();
+
+        if !*stdout_eof {
+            return true;
+        }
+
+        let stderr_eof = self.stderr_eof.lock().unwrap();
+
+        if !*stderr_eof {
+            return true;
+        }
+
+        return false;
     }
 }
 
