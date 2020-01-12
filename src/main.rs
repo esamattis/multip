@@ -215,11 +215,22 @@ fn command_with_name(s: &String) -> (&str, &str) {
     panic!("cannot parse name from> {}", s);
 }
 
+fn become_subreaper() -> Result<(), String> {
+    let ret = unsafe { prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) };
+
+    if ret == -1 {
+        Err(format!("Failed to become subreaper. Code {}", ret))
+    } else {
+        Ok(())
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    unsafe {
-        prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
+    if let Err(fail_msg) = become_subreaper() {
+        eprintln!("{}", fail_msg);
+        std::process::exit(1);
     }
 
     for command in args[1..].iter() {
