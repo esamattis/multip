@@ -157,7 +157,7 @@ impl MultipChild<'_> {
     }
 
     fn kill(&mut self, sig: Signal) {
-        if !self.is_alive() {
+        if !self.is_process_alive() {
             return;
         }
 
@@ -173,9 +173,13 @@ impl MultipChild<'_> {
         let pid = self.pid();
 
         log!("Sending {} to {}({})", sig, self.name, pid);
-        if kill(pid, sig).is_err() {
-            log!("kill failed for {}", self.name);
+        if let Err(err) = kill(pid, sig) {
+            log!("kill failed for [{}] {}", self.name, err);
         }
+    }
+
+    fn is_process_alive(&self) -> bool {
+        !self.is_dead
     }
 
     fn is_alive(&self) -> bool {
