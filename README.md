@@ -8,7 +8,7 @@ implementing zombie process reaping and signal forwarding. You could think
 this as a combination of `tini` (the default `init` in Docker) and
 `concurrently`.
 
--   [concurrently]: https://www.npmjs.com/package/concurrently
+[concurrently]: https://www.npmjs.com/package/concurrently
 
 ## Features
 
