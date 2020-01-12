@@ -117,6 +117,7 @@ fn uses_exit_code_of_first_dead_child_with_zore() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn reaps_zombies() {
     let mut cmd = run_multip(vec!["test: ./tests/zombie_creator.py"])
         .spawn()

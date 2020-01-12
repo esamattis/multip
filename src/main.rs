@@ -1,4 +1,6 @@
+#[cfg(target_os = "linux")]
 use libc::{prctl, PR_SET_CHILD_SUBREAPER};
+
 use nix::sys::signal;
 use nix::sys::signal::kill;
 use nix::sys::signal::Signal;
@@ -215,7 +217,18 @@ fn command_with_name(s: &String) -> (&str, &str) {
     panic!("cannot parse name from> {}", s);
 }
 
+#[cfg(not(target_os = "linux"))]
 fn become_subreaper() -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn become_subreaper() -> Result<(), String> {
+    // pid 1 does not need become subreaper because it is _the_ reaper
+    if id() == 1 {
+        return Ok();
+    }
+
     let ret = unsafe { prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) };
 
     if ret == -1 {
@@ -228,17 +241,17 @@ fn become_subreaper() -> Result<(), String> {
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if let Err(fail_msg) = become_subreaper() {
-        eprintln!("{}", fail_msg);
-        std::process::exit(1);
-    }
-
     for command in args[1..].iter() {
         if command == "--version" {
             println!("version {}", option_env!("MULTIP_VERSION").unwrap_or("DEV"));
             println!("git rev {}", option_env!("GITHUB_SHA").unwrap_or("DEV"));
             return;
         }
+    }
+
+    if let Err(fail_msg) = become_subreaper() {
+        eprintln!("{}", fail_msg);
+        std::process::exit(1);
     }
 
     log!("Started multip with pid {}", id());
