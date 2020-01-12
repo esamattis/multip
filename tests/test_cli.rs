@@ -119,8 +119,8 @@ fn uses_exit_code_of_first_dead_child_with_zore() {
 #[test]
 fn reaps_zombies() {
     let mut cmd = run_multip(vec![
-        "foo: sh -c 'sleep 0.1 & exec sleep 0.2'",
-        "bar: sh -c 'sleep 0.3'",
+        "foo: sh -c 'sleep 0.01 & exec sleep 0.02'",
+        "bar: sh -c 'sleep 0.1'",
     ])
     .spawn()
     .unwrap();
