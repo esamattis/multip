@@ -3,27 +3,22 @@
 Tiny multi process `init` for containers written in Rust. For example if you
 want to run nginx and php-fpm in a single container.
 
-Like [tini][] but for multiple processes. This is also somewhat similar
-to [concurrently], [s6][], [GNU Parallel][parallel] or some of it's
-[alternatives][] but intentionally much less featured. Also no runtime is
-required as it is just a single binary in contrast to concurrently requiring
-node.js and GNU Parallel Perl.
-
-[tini]: https://github.com/krallin/tini
-[concurrently]: https://www.npmjs.com/package/concurrently
-[s6]: http://skarnet.org/software/s6/
-[parallel]: https://www.gnu.org/software/parallel/
-[alternatives]: https://www.gnu.org/software/parallel/parallel_alternatives.html
+This is very similiar to [concurrently] but also acts as a valid `init` by
+implementing zombie process reaping and signal forwarding. You could think
+this as a combination of [tini] (the default `init` in Docker) and
+`concurrently`.
 
 ## Features
 
 -   If one the started processes dies it will bring all others down too so your
     container orchestration can handle the error (report, restart, whatever)
+-   Reap zombies
 -   Prefix process stdout&stderr with labels so you can know which process sent
     which message
 -   Signal forwarding to child processes
 -   Second SIGINT (ctrl-c) sends SIGTERM instead to the children and third
     sends SIGKILL.
+-   The exit code of `multip` will be the one used by the first dead child
 
 ## Installation
 
@@ -97,3 +92,20 @@ done
 
 Note that here we cannot use `exec` because we need to keep the script alive
 for restarts.
+
+# Similar tools
+
+Inits
+
+-   tini https://github.com/krallin/tini
+    -   The default `init` shipped with Docker
+-   dump-init https://github.com/Yelp/dumb-init
+-   catatonit https://github.com/openSUSE/catatonit
+-   s6 http://skarnet.org/software/s6/
+    -   More complete init system but still fairly small
+
+Plain multiprocess runners
+
+-   concurrently https://www.npmjs.com/package/concurrently
+-   GNU Parallel https://www.gnu.org/software/parallel/
+    -   Alternatives https://www.gnu.org/software/parallel/parallel_alternatives.html
