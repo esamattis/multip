@@ -127,6 +127,7 @@ fn reaps_zombies() {
         .unwrap();
 
     let lines = get_lines(cmd.stdout.take());
+    cmd.wait().unwrap();
 
     assert_line_matches(&lines, r"Reaped zombie process(.*) with exit code 12", 1);
 }
@@ -153,13 +154,12 @@ fn signal_handling() {
 
     let pid = nix::unistd::Pid::from_raw(cmd.id() as i32);
 
-    thread::sleep(Duration::from_millis(50));
+    thread::sleep(Duration::from_millis(100));
     kill(pid, Signal::SIGINT).unwrap();
     thread::sleep(Duration::from_millis(50));
     kill(pid, Signal::SIGINT).unwrap();
     thread::sleep(Duration::from_millis(50));
     kill(pid, Signal::SIGINT).unwrap();
-    thread::sleep(Duration::from_millis(50));
 
     let lines = get_lines(cmd.stdout.take());
     cmd.wait().unwrap();
