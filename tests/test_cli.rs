@@ -1,6 +1,9 @@
+use nix::sys::signal::{kill, Signal};
 use regex::Regex;
 use std::io::{BufRead, BufReader};
 use std::process::{ChildStdout, Command, Stdio};
+use std::thread;
+use std::time::Duration;
 
 fn run_multip(args: Vec<&str>) -> Command {
     let mut cmd = Command::new("target/debug/multip");
@@ -140,4 +143,26 @@ fn wraps_long_lines() {
 
     assert_has_line(&lines, "[foo...] 12345");
     assert_has_line(&lines, "[foo...] 67890");
+}
+
+#[test]
+fn signal_handling() {
+    let mut cmd = run_multip(vec!["test: ./tests/signals.py"])
+        .spawn()
+        .unwrap();
+
+    let pid = nix::unistd::Pid::from_raw(cmd.id() as i32);
+
+    thread::sleep(Duration::from_millis(50));
+    kill(pid, Signal::SIGINT).unwrap();
+    thread::sleep(Duration::from_millis(50));
+    kill(pid, Signal::SIGINT).unwrap();
+    thread::sleep(Duration::from_millis(50));
+    kill(pid, Signal::SIGINT).unwrap();
+    thread::sleep(Duration::from_millis(50));
+
+    let lines = get_lines(cmd.stdout.take());
+    cmd.wait().unwrap();
+    assert_has_line(&lines, "[test] got signal 2");
+    assert_has_line(&lines, "[test] got signal 15");
 }
