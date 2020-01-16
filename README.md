@@ -148,5 +148,7 @@ FastCGI to HTTP. You can run nginx in a separate container which proxies to
 the php-fpm container but because php-fpm cannot share static files you must
 deploy your code to both containers which can be a hassle to manage.
 
-With `multip` it is possible to create a container which runs multiple
-processes but acts like it has only one process with minimal overhead.
+With `multip` it is possible to create a container which runs both but acts
+like it has only one process with minimal overhead. This way the fact that it
+uses FastCGI is internal to the container and for users of the container it's
+like any other container speaking HTTP.
