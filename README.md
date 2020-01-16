@@ -8,6 +8,8 @@ implementing zombie process reaping and signal forwarding. You could think
 this as a combination of `tini` (the default `init` in Docker) and
 `concurrently`.
 
+> Wait. Containers should run only a single process, right? [Read this](#multiprocess-containers)
+
 [concurrently]: https://www.npmjs.com/package/concurrently
 
 ## Features
@@ -131,3 +133,20 @@ Plain multiprocess runners
 -   concurrently https://www.npmjs.com/package/concurrently
 -   GNU Parallel https://www.gnu.org/software/parallel/
     -   Alternatives https://www.gnu.org/software/parallel/parallel_alternatives.html
+
+# Multiprocess containers?
+
+In reality most your containers are multiprocess containers any way if they
+happen to use worker processes or spawn out processes to do one off tasks. So
+there' nothing technically wrong with them.
+
+It is usually a good design to create single purpose containers but it's not
+always the best approach. For example if you want to serve PHP apps with
+php-fpm it is difficult to do with single process containers because php-fpm
+does not speak HTTP but FastCGI so you need some web server to translate
+FastCGI to HTTP. You can run nginx in a separate container which proxies to
+the php-fpm container but because php-fpm cannot share static files you must
+deploy your code to both containers which can be a hassle to manage.
+
+With `multip` it is possible to create a container which runs multiple
+processes but acts like it has only one process with minimal overhead.
