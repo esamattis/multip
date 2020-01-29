@@ -146,7 +146,7 @@ Plain multi process runners
 
 In reality most your containers are multiprocess containers any way if they
 happen to use worker processes or spawn out processes to do one off tasks. So
-there' nothing technically wrong with them.
+there's nothing technically wrong with them.
 
 It is usually a good design to create single purpose containers but it's not
 always the best approach. For example if you want to serve PHP apps with
