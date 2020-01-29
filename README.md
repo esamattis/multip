@@ -1,14 +1,15 @@
 # multip
 
 Tiny multi process `init` for containers written in Rust. For example if you
-want to run nginx and php-fpm in a single container.
+want to run nginx and php-fpm in a single container. It's just a single 
+statically linked binary.
 
-This is very similiar to [concurrently][] but also acts as a valid `init` by
+This is very similiar to [concurrently][] but also acts as a `init` by
 implementing zombie process reaping and signal forwarding. You could think
 this as a combination of `tini` (the default `init` in Docker) and
 `concurrently`.
 
-> Wait. Containers should run only a single process, right? [Read this](#multiprocess-containers)
+> Wait. Containers should run only a single process, right? [Read this](#multi-process-containers)
 
 [concurrently]: https://www.npmjs.com/package/concurrently
 
@@ -119,14 +120,21 @@ exit $ret
 
 # Similar tools
 
-Inits
+Single process inits
 
 -   tini https://github.com/krallin/tini
     -   The default `init` shipped with Docker
 -   dump-init https://github.com/Yelp/dumb-init
 -   catatonit https://github.com/openSUSE/catatonit
--   s6 http://skarnet.org/software/s6/
-    -   More complete init system but still fairly small
+
+Multi process inits
+
+-   s6 https://skarnet.org/software/s6-linux-init/
+    -   s6 is a suite of programs for (multi) process supervision that can be ran as an init
+    -   Installation is non-trivial on some systems
+-   systemd
+    -  This is the mother of all inits. It has every feature you can hope of and more
+    -  Your linux distro is probably using it
 
 Plain multiprocess runners
 
@@ -134,7 +142,7 @@ Plain multiprocess runners
 -   GNU Parallel https://www.gnu.org/software/parallel/
     -   Alternatives https://www.gnu.org/software/parallel/parallel_alternatives.html
 
-# Multiprocess containers?
+# Multi process containers?
 
 In reality most your containers are multiprocess containers any way if they
 happen to use worker processes or spawn out processes to do one off tasks. So
