@@ -136,7 +136,7 @@ Multi process inits
     -  This is the mother of all inits. It has every feature you can hope of and more
     -  Your linux distro is probably using it
 
-Plain multiprocess runners
+Plain multi process runners
 
 -   concurrently https://www.npmjs.com/package/concurrently
 -   GNU Parallel https://www.gnu.org/software/parallel/
