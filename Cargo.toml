@@ -5,7 +5,7 @@ authors = ["Esa-Matti Suuronen <esa-matti@suuronen.org>"]
 edition = "2018"
 
 [dependencies]
-nix = "0.16.0"
+nix = "0.20.2"
 libc = "0.2"
 memchr = "2.2.1"
 lazy_static = "1.4.0"
